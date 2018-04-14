@@ -2839,10 +2839,7 @@ int main (void)
                               }
                               
                            }
-                           
-                           
-                           
-                        } // end DCF77erfolg=0
+                         } // end DCF77erfolg=0
                         
                      } // end (uhrstatus & (1<<SYNC_WAIT)
                      
