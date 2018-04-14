@@ -179,7 +179,7 @@ static char SolarString[48];
 #define NULLTASK				0xB0	// Nichts tun
 #define STATUSTASK			0xB1	// Status des TWI aendern
 #define STATUSCONFIRMTASK	0xB2	// Statusaendern bestaetigen
-
+#define STATUSWAITTASK     0xB3  // Warten bis TWI zuende
 #define EEPROMREPORTTASK	0xB4	// Daten von EEPROM an HomeServer schicken
 #define EEPROMCONFIRMTASK	0xB5  // Quittung an HomeCentral senden
 #define EEPROMRECEIVETASK	0xB6	// Start-Adresse von EEPROM empfangen
@@ -188,6 +188,9 @@ static char SolarString[48];
 #define EEPROMSENDTASK		0xB9	// von EEPROM lesen
 
 #define PWMREADTASK        0xBA  // PWM-Daten vom EEPROM lesen und an Zielraum schicken (synchronisierung)
+
+#define SYNCWAITTASK       0xBB // Sync im gang
+#define SYNCOKTASK         0xBB // Sync OK
 
 #define DATATASK				0xC0	// Normale Loop im Webserver
 
@@ -1642,8 +1645,7 @@ int main (void)
 	
 	initOSZI();
    
-   
-   /******************************************************************/
+    /******************************************************************/
 
 	/*** Hauptschleife															***/
 	
@@ -1688,7 +1690,7 @@ int main (void)
 				BUS_Status |=(1<<TWI_CONTROLBIT);		// TWI ON
 				BUS_Status &=~(1<<WEB_CONTROLBIT);		// WEB OFF
 				lcd_clr_line(0);
-				err_gotoxy(0,1); 
+				err_gotoxy(0,0); 
 				err_puts("Start\0");	//	Erste Runde, Strich an letzter Stelle weg
 #pragma mark RTC init				
 				
@@ -1721,18 +1723,18 @@ int main (void)
 				
 				if (res)
 				{
-               err_gotoxy(4,1);
+               err_gotoxy(16,0);
 					err_puts("     \0");
 
-					err_gotoxy(4,1);
+					err_gotoxy(16,0);
 					err_puts("D-\0");
 				}
 				else
             {
-               err_gotoxy(0,1);
+               err_gotoxy(16,0);
 					err_puts("     \0");
 
-					err_gotoxy(0,1);
+					err_gotoxy(16,0);
 					err_puts("D+\0");
 				}
 				
@@ -1754,17 +1756,15 @@ int main (void)
       #pragma mark Standardloop start
 		
 		loopcount0++;
-		if (loopcount0 >= 0x0FFF)
+		if (loopcount0 >= 0x4FFF)
 		{
 			LOOPLEDPINPORT ^=(1<<LOOPLEDPIN); // Blink-LED
-         
-      
 
 			loopcount0=0;
 			loopcount1++;
-			//lcd_gotoxy(0,0);
+			err_gotoxy(18,3);
 			//lcd_puts("lpcnt1 \0");
-			//lcd_puthex(loopcount1);
+			err_puthex(loopcount1);
 			if (startdelay==0)
 			{
 				//				timer2(0xAF);
@@ -1775,8 +1775,8 @@ int main (void)
 			
 			if (loopcount1>=0x1F)
 			{
-            err_gotoxy(16,3);
-            err_puthex((testcounterL));// >>= 4);
+            //err_gotoxy(16,3);
+            //err_puthex((testcounterL));// >>= 4);
 
            // uint8_t sevenseglo = sevenseg & 0x0F;
            // uint8_t sevenseghi = (sevenseg & 0xF0)>>4;
@@ -1915,7 +1915,7 @@ int main (void)
 		//err_putc('-');
 		
 		// ***********************
-		if (SPI_CONTROL_PORTPIN & (1<< SPI_CONTROL_CS_HC)) // MISO ist HI in Pausen.
+		if (SPI_CONTROL_PORTPIN & (1<< SPI_CONTROL_CS_HC)) // CS ist HI, SPI beendet
 		{
 			// ***********************
 			/*
@@ -1926,18 +1926,19 @@ int main (void)
 			 */
 			 			
 			// ***********************
-			SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO); // CS ist HI, SPI ist Passiv,
+			SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO); // SPI ist Passiv,
 			
 			#pragma mark PASSIVE
 
-			if (spistatus &(1<<ACTIVE_BIT)) // Slave ist neu passiv geworden. Aufraeumen, Daten uebernehmen
+			if (spistatus &(1<<ACTIVE_BIT)) // CS beendet. Slave ist neu passiv geworden. Aufraeumen, Daten uebernehmen
 			{
 				
 				wdt_reset();
 				SPI_Call_count0++;
 				// Eingang von Interrupt-Routine, Daten von Webserver
-				err_gotoxy(19,0);
-				err_putc(' ');
+            err_clr_line(1);
+				err_gotoxy(19,0); 
+				err_putc(' '); // SUCCESS-Marke weg
 				
 				// in lcd verschoben
 				lcd_clr_line(2);
@@ -1972,6 +1973,12 @@ int main (void)
 				err_gotoxy(19,0);
 				err_putc(' ');
 				err_gotoxy(19,0);
+            err_clr_line(1);
+            //err_clr_line(2);
+            
+            lcd_clr_line(2);
+            
+
 				if (ByteCounter == SPI_BUFSIZE-1) // Uebertragung war vollstaendig
 				{
 					if (out_startdaten + in_enddaten==0xFF)
@@ -1980,7 +1987,29 @@ int main (void)
 						spistatus |= (1<<SUCCESS_BIT); // Bit fuer vollstaendige und korrekte  Uebertragung setzen
 						lcd_gotoxy(19,0);
 						lcd_putc(' ');
-						//lcd_clr_line(3);
+						//lcd_clr_line(2);
+                  err_clr_line(2);
+                  err_clr_line(3);
+                  
+                  err_gotoxy(0,3);
+                  err_puts("OK\0");
+                  err_puthex(ByteCounter);
+                  
+                  
+                  err_putc(' ');
+                  err_puthex(in_startdaten);
+                  err_puthex(in_enddaten);
+                  
+                  err_putc(' ');
+                  err_puthex(out_startdaten);
+                  err_puthex(out_enddaten);
+                  err_putc(' ');
+                  err_puthex(out_startdaten + in_enddaten);
+
+                  //err_gotoxy(0,2);
+                  //err_puthex(in_lbdaten);
+                  //err_puthex(in_hbdaten);
+
 						//err_gotoxy(0,1);
 						//err_puthex(loopCounterSPI++);
 						//err_puts("OK \0");
@@ -1996,12 +2025,23 @@ int main (void)
 					{
 						spistatus &= ~(1<<SUCCESS_BIT); // Uebertragung fehlerhaft, Bit loeschen
 						err_putc('-');
-						err_clr_line(1);
-						err_gotoxy(0,1);
-						err_puts("ER1\0");
+						//err_clr_line(1);
+                  //lcd_clr_line(3);
+                  
+                  err_clr_line(2);
+                  err_clr_line(3);
+						err_gotoxy(0,3);
+						err_puts("E1\0");
+                  err_puthex(ByteCounter);
+                  
+
+                  err_putc(' ');
+                  err_puthex(in_startdaten);
+                  err_puthex(in_enddaten);
+
                   err_putc(' ');
 						err_puthex(out_startdaten);
-						err_puthex(in_enddaten);
+						err_puthex(out_enddaten);
 						err_putc(' ');
 						err_puthex(out_startdaten + in_enddaten);
                   
@@ -2010,17 +2050,25 @@ int main (void)
 							SendErrCounter++;
 						}
 						//errCounter++;
+                  in_startdaten = DATATASK; // 180414 weiterfahren wie bisher
 					}
 					
 				}
 				else 
 				{
 					spistatus &= ~(1<<SUCCESS_BIT); //  Uebertragung unvollstaendig, Bit loeschen
-					err_clr_line(0);
-					err_gotoxy(0,0);
-					err_puts("ER2\0");
+					
+               err_putc('!');
+               err_clr_line(1);
+               err_clr_line(2);
+					err_gotoxy(0,2);
+					err_puts("E2\0");
+               err_putint(ByteCounter);
 					err_putc(' ');
-               err_puthex(out_startdaten);
+               err_puthex(in_lbdaten);
+               err_puthex(in_hbdaten);
+               err_putc(' ');
+               err_puthex(in_startdaten);
                err_puthex(in_enddaten);
                err_putc(' ');
                err_puthex(out_startdaten + in_enddaten);
@@ -2029,8 +2077,14 @@ int main (void)
 					//errCounter++;
 					IncompleteCounter++;
                 spistatus &= ~(1<<SPI_SHIFT_IN_OK_BIT);
+               
+               in_startdaten = DATATASK; // 180414 weiterfahren wie bisher
 				}
 				
+            lcd_gotoxy(6,0);
+            lcd_puts("out ");
+            lcd_puthex(out_startdaten);
+            lcd_puthex(errCounter);
 				//lcd_gotoxy(11, 1);							// Events zahelen
 				//lcd_puthex(OutCounter);
 				/*						
@@ -2038,15 +2092,18 @@ int main (void)
 				 lcd_puthex(SendErrCounter);
 				 lcd_puthex(IncompleteCounter);
 				 */				
-				/*
-				 lcd_gotoxy(0,0);
+				
+				 lcd_gotoxy(0,2);
 				 lcd_putc('i');
 				 lcd_puthex(in_startdaten);
 				 lcd_puthex(complement);
-				 lcd_putc(' ');
+             
+             lcd_putc(' ');
 				 lcd_putc('a');
 				 lcd_puthex(out_startdaten);
 				 lcd_puthex(in_enddaten);
+            
+            /*
 				 lcd_putc(' ');
 				 lcd_putc('l');
 				 lcd_puthex(in_lbdaten);
@@ -2055,9 +2112,9 @@ int main (void)
 				 lcd_puthex(in_hbdaten);
 				 out_hbdaten++;
 				 out_lbdaten--;
-				 
-				 lcd_putc(out_startdaten);
 				 */
+				 
+				 
 				/*
 				 lcd_gotoxy(0,0);
 				 lcd_puthex(inbuffer[9]);
@@ -2079,6 +2136,7 @@ int main (void)
 				spistatus &= ~(1<<LB_BIT);				// Bit 4 loeschen
 				spistatus &= ~(1<<HB_BIT);				// Bit 5 loeschen
 				
+            
 				// aufraeumen
 				out_startdaten=0x00;
 				out_hbdaten=0;
@@ -2115,7 +2173,7 @@ int main (void)
 				
 		else						// CS ist LO (IS_CS_HC_ACTIVE)
 		{
-			if (!(spistatus & (1<<ACTIVE_BIT))) // CS ist neu aktiv (LO) geworden, Active-Bit 0 ist noch nicht gesetzt
+			if (!(spistatus & (1<<ACTIVE_BIT))) // CS ist NEU aktiv (LO) geworden, Active-Bit 0 ist noch nicht gesetzt
 			{
 				// Aufnahme der Daten vom Webserver vorbereiten
 				uint8_t j=0;
@@ -2142,27 +2200,7 @@ int main (void)
 				
 				
 				
-				// SPI-Buffer vorwaertsschalten
-				/*
-				uint8_t wert0=spibuffer[15];
-				for(i=15;i>0;i--)
-				{
-					spibuffer[i]=spibuffer[i-1];
-				}
-				spibuffer[0]=wert0;
-				*/
-				
-				/*
-				// SPI-Buffer rueckwaertsschalten
-				
-				uint8_t wert0=spibuffer[0];
-				for(i=0;i<15;i++)
-				{
-					spibuffer[i]=spibuffer[i+1];
-				}
-				spibuffer[15]=wert0;
-				*/
-				
+					
 			}//		if (!(spistatus & (1<<ACTIVE_BIT)))
 		}//											(IS_CS_HC_ACTIVE) 
 		
@@ -2213,7 +2251,7 @@ int main (void)
 				lcd_puthex(in_startdaten);
 				//delay_ms(100);
             outbuffer[42] = in_startdaten;
-            
+            lcd_clr_line(2);
 				switch (in_startdaten) // Daten vom Webserver, liegen am Anfang der Schleife bereit 
 				{
 					case NULLTASK: // B0
@@ -2238,6 +2276,9 @@ int main (void)
 						lcd_puthex(in_lbdaten);
 						lcd_puts("         \0");
                   
+                  err_gotoxy(10,0);
+                  err_puthex(inbuffer[3]);
+                  outbuffer[3] = 0xBB;
                   
 						if (in_hbdaten == 0x01)// TWI solll wieder eingeschaltet werden
 						{
@@ -2627,7 +2668,7 @@ int main (void)
                      uhrstatus &= ~(1<<SYNC_READY);
                      uhrstatus |= (1<<SYNC_OK);
                      uhrstatus &= ~(1<<SYNC_NEW);                 // TWI soll jetzt Daten senden
-
+                     
                    }
 						else
                   {
@@ -2701,6 +2742,7 @@ int main (void)
                      if ((((min/30)&&(min%30==0)&&(std<23))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
                      {
                          {
+                         //  out_startdaten = SYNCWAITTASK;
                            uhrstatus &= ~(1<<SYNC_OK);
                            uhrstatus |= (1<<SYNC_WAIT); // Beginn Sync, Warten starten
                            DCF77_counter=0; // Zaehler fuer korrekte Daten
@@ -2808,6 +2850,7 @@ int main (void)
                      
                      if (uhrstatus & (1<<SYNC_READY)) // Uhr ist wieder bereit
                      {
+                    //    out_startdaten = SYNCOKTASK;
                         uint8_t res=0;
                         res=rtc_write_Zeit(DCF77daten[1], DCF77daten[0],0); // stunde, minute, sekunde
                         
@@ -2947,7 +2990,7 @@ int main (void)
 						Read_Err=0;
 						EEPROM_Err=0;
 						
-                  lcd_gotoxy(10,0);
+                  lcd_gotoxy(14,0);
                   lcd_putint2(std);
                   lcd_putc(':');
                   lcd_putint2(min);
@@ -2992,7 +3035,7 @@ int main (void)
 								std= RTCdaten[1];
 								tag= RTCdaten[2];
 								
-								lcd_gotoxy(10,0);
+								lcd_gotoxy(14,0);
 								lcd_putint2(std);
                         lcd_putc(':');
                         lcd_putint2(min);
@@ -4953,72 +4996,6 @@ int main (void)
 		
 		wdt_reset();
 	
-      /*
-		// TWI mit Taste toggeln
-		if (!(PINB & (1<<PORTB0))) // Taste 0 TWI Ein/Aus
-		{
-			//err_gotoxy(12,0);
-			//err_puts("P0 Down\0");
-			//wdt_reset();
-			if (! (TastenStatus & (1<<PORTB0))) //Taste 0 war nicht nicht gedrueckt
-			{
-				TastenStatus |= (1<<PORTB0);
-				Tastencount=0;
-				//err_gotoxy(8,0);
-				//err_puts("P0 \0");
-				//lcd_putint(TastenStatus);
-				//delay_ms(800);
-			}
-			else
-			{
-				
-				
-				Tastencount ++;
-				//lcd_gotoxy(7,1);
-				//lcd_puts("TC \0");
-				//lcd_putint(Tastencount);
-				wdt_reset();
-				if (Tastencount >= Tastenprellen)
-				{
-					err_gotoxy(8,0);
-					err_puts("P0\0");
-					//err_putint(Tastencount);
-					err_putc(' ');
-					err_puthex(BUS_Status);
-					//err_putc('v');
-					
-					if (BUS_Status & (1<<TWI_CONTROLBIT)) //  TWI ist gesetzt > loeschen
-					{
-						//err_putc('1');
-						//BUS_Status |= (1<<2); // WEB request
-						
-						//BUS_Status &= ~(1<<3); // TWI wird OFF, Bit 1 auf L setzen
-						BUS_Status &= ~(1<<TWI_CONTROLBIT);
-						LeseStatus=0;
-						SchreibStatus=0;
-						PORTC &= ~(1<<TWI_CONTROLPIN); // TWI-LED OFF
-						
-						//web_request &= ~(1<<7);
-						//err_putc('n');
-						//err_puthex(BUS_Status);
-					}
-					else
-					{
-						
-						BUS_Status |= (1<<TWI_CONTROLBIT);
-						PORTC |= (1<<TWI_CONTROLPIN); // TWI-LED ON
-						
-					}
-					
-					
-					Tastencount=0;
-					TastenStatus &= ~(1<<PORTB0);
-					
-				}
-			}//else
-			
-		}
-		*/
 		wdt_reset();
 		
 		if (!(PINB & (1<<PB1))) // Taste 1

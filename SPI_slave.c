@@ -69,7 +69,7 @@ volatile uint8_t								out_lbdaten;
 //extern volatile uint8_t						timer0startwert;
 
 static volatile uint8_t						ByteCounter=0xFF;
-volatile uint8_t								errCounter=0;
+volatile uint8_t								errCounter=1;
 volatile uint8_t								TWI_errCounter=0;
 
 static volatile uint8_t						ONCounter=0x00;
@@ -241,7 +241,7 @@ void InitSPI_Slave(void)
 
 
 // Interrupt Routine Slave Mode (interrupt controlled)
-// Aufgerufen bei fallender Flanke an INT0, gesetzt von Webserver
+// Aufgerufen bei fallender Flanke an INT0, gesetzt vom SCK des Webservers
 
 ISR( INT0_vect )
 {
