@@ -105,6 +105,9 @@ static volatile uint8_t EEPROM_Err;
 
 static volatile uint8_t Echo=0;
 static volatile uint8_t olderrcounter=0;
+
+
+//volatile uint8_t TWI_FLAG;
 /* ************************************** */
 volatile uint8_t sevenseg = 0;
 volatile uint8_t sevensegalt = 0;
@@ -186,6 +189,7 @@ static char SolarString[48];
 #define EEPROMWRITETASK		0xB7	// auf EEPROM schreiben
 #define EEPROMREADTASK		0xB8	// von EEPROM lesen
 #define EEPROMSENDTASK		0xB9	// von EEPROM lesen
+#define EEPROMWAITTASK      0xBE   // auf schreiben von EEPROM warten
 
 #define PWMREADTASK        0xBA  // PWM-Daten vom EEPROM lesen und an Zielraum schicken (synchronisierung)
 
@@ -250,7 +254,7 @@ volatile uint8_t  DCF77_counter =0; // Anzahl gueltige Datumspakete in Folge
 #define TASTE0 235
 #define TASTER 245
 
-#define STARTDELAY 0x0FF
+#define STARTDELAY 0x0F
 //#define STARTDELAY 0
 
 #define WOCHENPLANBREITE 0x40;
@@ -451,7 +455,7 @@ volatile uint8_t OG1RXdaten[buffer_size];
 volatile uint8_t OG1TXdaten[buffer_size];
 
 /*Der Buffer fuer die Input-Daten des OG2*/
-//volatile uint8_t OG2RXdaten[buffer_size];
+volatile uint8_t OG2RXdaten[buffer_size];
 /*Der Buffer fuer die Output-Daten des OG2*/
 volatile uint8_t OG2TXdaten[buffer_size];
 
@@ -1504,14 +1508,16 @@ int main (void)
 	lcd_CGRAMInit_Titel();
 	
 	delay_ms(50);
+   lcd_gotoxy(0,0);
 	lcd_puts("Guten Tag\0");
-	delay_ms(800);
-	lcd_cls();
+	delay_ms(400);
+	//lcd_cls();
+   lcd_gotoxy(0,0);
 	lcd_puts("Master ready\0");
 	
 	err_initialize(ERR_FUNCTION_8x2, ERR_CMD_ENTRY_INC, ERR_CMD_ON);
 	err_puts("Err ready\0");
-	delay_ms(800);
+	delay_ms(400);
 	
 	
 	//	initADC(0);
@@ -1628,11 +1634,11 @@ int main (void)
 
 	lcd_clr_line(0);
 	lcd_puts("InitSPI_Slave\0");
-	delay_ms(10);
+	delay_ms(100);
 
 	InitSPI_Slave();
 	lcd_puts("OK\0");
-	delay_ms(10);
+	delay_ms(100);
 	/******************************************************************/
 	
 	//lcd_gotoxy(18,1); 
@@ -1675,8 +1681,7 @@ int main (void)
 			err_putc(' ');	//	Erste Runde, Strich an letzter Stelle weg
 			
 		}
-		
-		wdt_reset();
+ 		wdt_reset();
 		
 		//	Startroutine noch im Gang: TWI beide Pins HI also Rückwaertszaehlen
 		if( startdelay && ((PINC & (1<<SCLPIN) && (PINC & (1<<SDAPIN)))))	// SCL UND SDA ist HI
@@ -1701,6 +1706,7 @@ int main (void)
 				delay_ms(10);
 				uint8_t res=0;
 				
+            /*
 				res=rtc_write_Control(1);
 				
 				// stunde, minute, sekunde
@@ -1709,11 +1715,11 @@ int main (void)
 				
 				if (res)
 				{
-					err_gotoxy(0,1);
+					err_gotoxy(15,0);
 					err_puts("Z-\0");
 				}
 				else {
-					err_gotoxy(0,1); 
+					err_gotoxy(15,0); 
 					err_puts("Z+\0");
 				}
 				
@@ -1723,28 +1729,37 @@ int main (void)
 				
 				if (res)
 				{
-               err_gotoxy(16,0);
-					err_puts("     \0");
+               err_gotoxy(17,0);
+					err_puts("  ");
 
-					err_gotoxy(16,0);
+					err_gotoxy(17,0);
 					err_puts("D-\0");
 				}
 				else
             {
-               err_gotoxy(16,0);
-					err_puts("     \0");
+               err_gotoxy(17,0);
+					err_puts("  ");
 
-					err_gotoxy(16,0);
+					err_gotoxy(17,0);
 					err_puts("D+\0");
 				}
 				
 				wdt_reset();
+             */
 				sei();
 				
+            SPI_CONTROL_PORT   |= (1<<STARTUP_PIN); // soft-SPI aktivieren
 				
-			}
+			}// startdelay==1
 			
-			startdelay--;
+         if (startdelay)
+         {
+            //lcd_gotoxy(18,3);
+            //lcd_putint2(startdelay);
+            //startdelay--;
+         }
+
+			
 			
 		}
 		else
@@ -1772,7 +1787,11 @@ int main (void)
 				//SPI_shift();
 				
 			}
-			
+         if (startdelay)
+         {
+            lcd_gotoxy(0,18);
+            lcd_putint2(startdelay);
+         }
 			if (loopcount1>=0x1F)
 			{
             //err_gotoxy(16,3);
@@ -1829,9 +1848,10 @@ int main (void)
 		
 		if (((startdelay==0)||(startdelay==STARTDELAY))&& (((!(PINC & (1<<SDAPIN))) && PINC & (1<<SCLPIN)) ) )// SDA ist LO UND SCL ist HI (warten auf Ack)
       {
-         err_gotoxy(15,1);
+         err_gotoxy(0,2);
          err_puts("ERR\0");
-         
+         err_puthex(startdelay);
+         err_puthex(PORTC);
          /*
           
           1. TWI Modul am Master abschalten.
@@ -1936,13 +1956,13 @@ int main (void)
 				wdt_reset();
 				SPI_Call_count0++;
 				// Eingang von Interrupt-Routine, Daten von Webserver
-            err_clr_line(1);
+            //err_clr_line(1);
 				err_gotoxy(19,0); 
 				err_putc(' '); // SUCCESS-Marke weg
 				
 				// in lcd verschoben
-				lcd_clr_line(2);
-				lcd_gotoxy(0,2);
+				//lcd_clr_line(3);
+				lcd_gotoxy(0,3);
 				
 				// Eingang anzeigen
 				lcd_puts("iW \0");
@@ -1952,14 +1972,72 @@ int main (void)
 				lcd_puthex(in_lbdaten);
 				lcd_putc(' ');
 				uint8_t j=0;
-				for (j=0;j<4;j++)
+				for (j=0;j<1;j++)
 				{
 					//lcd_putc(' ');
-					lcd_puthex(inbuffer[j]);
+					//lcd_puthex(inbuffer[j]);
 					//err_putc(inbuffer[j]);
 				}
+            lcd_putint(outbuffer[8]);
+            lcd_putc(' ');
+            lcd_putint(SPI_Call_count0);
+            
+            lcd_gotoxy(12,2);
+            lcd_putint2(inbuffer[16]);// stunde
+            lcd_putint2(inbuffer[17]);// minute
+            //lcd_putint2(inbuffer[18]);// wochentag
+            lcd_gotoxy(0,1);
+            lcd_putc('A');
+            if (uhrstatus & (1<<SYNC_NULL)) // Start, RTC setzen mit  Zeit vom Webserver
+            {
+               uint8_t res = 0;
+               res=rtc_write_Control(1);
+               lcd_putc('B');
+               // stunde, minute, sekunde
+               res=rtc_write_Zeit(inbuffer[16],inbuffer[17],0);// uint8_t stunde, uint8_t minute, uint8_t sekunde
+               delay_ms(30);
+               lcd_putc('C');
+               if (res)
+               {
+                  err_gotoxy(15,0);
+                  err_puts("Z-\0");
+                  err_puthex(res);
+               }
+               else {
+                  err_gotoxy(15,0); 
+                  err_puts("Z+\0");
+               }
+               lcd_putc('D');
+               // Datum: 1 = Montag
+               res=rtc_write_Datum(inbuffer[18],inbuffer[19],inbuffer[20],18);// uint8_t wochentag, uint8_t tagdesmonats, uint8_t monat, uint8_t jahr
+               delay_ms(30);
+               lcd_putc('E');
+               if (res)
+               {
+                  err_gotoxy(14,0);
+                  err_puts("  ");
+                  
+                  err_gotoxy(14,0);
+                  err_puts("D-\0");
+                  err_puthex(res);
+               }
+               else
+               {
+                  err_gotoxy(17,0);
+                  err_puts("  ");
+                  
+                  err_gotoxy(17,0);
+                  err_puts("D+\0");
+               }
+               lcd_putc('F');
+               oldmin = inbuffer[17];
+               oldstd = inbuffer[16];
+               oldtag = inbuffer[18];
+               uhrstatus &= ~(1<<SYNC_NULL);
+               lcd_putc('G');
+            }
 				OutCounter++;
-				
+				lcd_putc('H');
 				// Uebertragung pruefen
 				
 				//lcd_gotoxy(6,0);
@@ -1976,11 +2054,12 @@ int main (void)
             err_clr_line(1);
             //err_clr_line(2);
             
-            lcd_clr_line(2);
+            //lcd_clr_line(2);
             
-
+            
 				if (ByteCounter == SPI_BUFSIZE-1) // Uebertragung war vollstaendig
 				{
+               lcd_putc('I');
 					if (out_startdaten + in_enddaten==0xFF)
 					{
 						err_putc('+');
@@ -1988,7 +2067,7 @@ int main (void)
 						lcd_gotoxy(19,0);
 						lcd_putc(' ');
 						//lcd_clr_line(2);
-                  err_clr_line(2);
+                 // err_clr_line(2);
                   err_clr_line(3);
                   
                   err_gotoxy(0,3);
@@ -2028,7 +2107,7 @@ int main (void)
 						//err_clr_line(1);
                   //lcd_clr_line(3);
                   
-                  err_clr_line(2);
+                //  err_clr_line(2);
                   err_clr_line(3);
 						err_gotoxy(0,3);
 						err_puts("E1\0");
@@ -2056,11 +2135,12 @@ int main (void)
 				}
 				else 
 				{
+               lcd_putc('G');
 					spistatus &= ~(1<<SUCCESS_BIT); //  Uebertragung unvollstaendig, Bit loeschen
 					
                err_putc('!');
-               err_clr_line(1);
-               err_clr_line(2);
+              // err_clr_line(1);
+              // err_clr_line(2);
 					err_gotoxy(0,2);
 					err_puts("E2\0");
                err_putint(ByteCounter);
@@ -2082,9 +2162,9 @@ int main (void)
 				}
 				
             lcd_gotoxy(6,0);
-            lcd_puts("out ");
+            lcd_puts("out");
             lcd_puthex(out_startdaten);
-            lcd_puthex(errCounter);
+            //lcd_puthex(outbuffer[8]);
 				//lcd_gotoxy(11, 1);							// Events zahelen
 				//lcd_puthex(OutCounter);
 				/*						
@@ -2096,13 +2176,13 @@ int main (void)
 				 lcd_gotoxy(0,2);
 				 lcd_putc('i');
 				 lcd_puthex(in_startdaten);
-				 lcd_puthex(complement);
+				 //lcd_puthex(complement);
              
              lcd_putc(' ');
 				 lcd_putc('a');
-				 lcd_puthex(out_startdaten);
-				 lcd_puthex(in_enddaten);
-            
+				 //lcd_puthex(out_startdaten);
+				 //lcd_puthex(in_enddaten);
+             lcd_puthex(outbuffer[8]);
             /*
 				 lcd_putc(' ');
 				 lcd_putc('l');
@@ -2251,7 +2331,7 @@ int main (void)
 				lcd_puthex(in_startdaten);
 				//delay_ms(100);
             outbuffer[42] = in_startdaten;
-            lcd_clr_line(2);
+            //lcd_clr_line(2);
 				switch (in_startdaten) // Daten vom Webserver, liegen am Anfang der Schleife bereit 
 				{
 					case NULLTASK: // B0
@@ -2498,12 +2578,14 @@ int main (void)
                   lcd_putint2(objekt);
                   lcd_putc('w');
                   lcd_putint2(wochentag);
-                  /*
-						lcd_puthex(EEPROMTXdaten[0]);
-						lcd_puthex(EEPROMTXdaten[1]);
-						lcd_puthex(EEPROMTXdaten[2]);
-						lcd_puthex(EEPROMTXdaten[3]);
-						*/
+                  
+                  
+                  err_gotoxy(0,2);
+						err_puthex(EEPROMTXdaten[0]);
+						err_puthex(EEPROMTXdaten[1]);
+						err_puthex(EEPROMTXdaten[2]);
+						err_puthex(EEPROMTXdaten[3]);
+						
 						
 						uint8_t eepromerfolg=0;
 						
@@ -2522,7 +2604,8 @@ int main (void)
 						
 						// Quittung senden: Daten fuer naechstes Paket von SPI laden
 						
-                                                         // Im Moment nicht verwendet. Webserver fragt nicht nach
+                  // Im Moment nicht verwendet. Webserver fragt nicht nach
+                  // 180421 Webserver fragt nach
 						
 						if (eepromerfolg==0) // alles ok
 						{
@@ -2544,7 +2627,7 @@ int main (void)
 						{
 							// SPI senden verhindern
 							spistatus |= (1<<TWI_ERR_BIT);
-
+                     out_startdaten= NULLTASK; // B5
 							outbuffer[1]=2;
 							lcd_gotoxy(19,1);
 							lcd_putc('!');
@@ -2556,7 +2639,12 @@ int main (void)
 						in_startdaten=0;
 						//delay_ms(200);
 						
-					}break;
+					}break; // EEPROMWRITETASK
+                  
+               case EEPROMCONFIRMTASK:
+               {
+                  out_startdaten= EEPROMCONFIRMTASK; // B5
+               }break; // EEPROMCONFIRMTASK
 
 #pragma mark PWMREADTASK
                case PWMREADTASK:
@@ -2597,52 +2685,52 @@ int main (void)
 					case DATATASK:
 						
 					//default:						// DATATASK
-					{
-
+               {
+                  
 #pragma mark Lese- und Schreibstatus setzen
-						//	******************************
-						//	*	HomeCentral-Tasks setzen
-						//	******************************
-						//	Wer soll schreiben?
-						//SchreibStatus |= (1<< HEIZUNG); // in Uhr-Abfrage gesetzt
-						//SchreibStatus |= (1<< WERKSTATT);
-						//SchreibStatus |= (1<< BUERO);
-						//SchreibStatus |= (1<< WOZI);
-						//SchreibStatus |= (1<< LABOR);
-						//SchreibStatus |= (1<< OG1);
-						//SchreibStatus |= (1<< OG2);
-						//SchreibStatus |= (1<< ESTRICH);
-						
-						
-						// Wer soll lesen?
-						//LeseStatus |= (1<< HEIZUNG);
-						//LeseStatus |= (1<< WERKSTATT);
-						//LeseStatus |= (1<< BUERO);
-						//LeseStatus |= (1<< WOZI);
-						//LeseStatus |= (1<< LABOR);
-						//LeseStatus |= (1<< OG1);
-						//LeseStatus |= (1<< OG2);
-						//LeseStatus |= (1<< ESTRICH);
-						
-#pragma mark readSR						
-						Read_Device=0;
-						Write_Device=0;
-						
-						//err_gotoxy(5,1);
-						//Zaehler fuer TWI-Loop
-						//err_puthex(loopCounterTWI++);
-						lcd_gotoxy(15,0);
-//						lcd_puts("U\0");
-						lcd_putc(' ');
-						OSZIBLO;
-						//err_gotoxy(0,0);
-
-						//err_puts("U\0");
+                  //	******************************
+                  //	*	HomeCentral-Tasks setzen
+                  //	******************************
+                  //	Wer soll schreiben?
+                  //SchreibStatus |= (1<< HEIZUNG); // in Uhr-Abfrage gesetzt
+                  //SchreibStatus |= (1<< WERKSTATT);
+                  //SchreibStatus |= (1<< BUERO);
+                  //SchreibStatus |= (1<< WOZI);
+                  //SchreibStatus |= (1<< LABOR);
+                  //SchreibStatus |= (1<< OG1);
+                  //SchreibStatus |= (1<< OG2);
+                  //SchreibStatus |= (1<< ESTRICH);
+                  
+                  
+                  // Wer soll lesen?
+                  //LeseStatus |= (1<< HEIZUNG);
+                  //LeseStatus |= (1<< WERKSTATT);
+                  //LeseStatus |= (1<< BUERO);
+                  //LeseStatus |= (1<< WOZI);
+                  //LeseStatus |= (1<< LABOR);
+                  //LeseStatus |= (1<< OG1);
+                  //LeseStatus |= (1<< OG2);
+                  //LeseStatus |= (1<< ESTRICH);
+                  
+                  
+                  Read_Device=0;
+                  Write_Device=0;
+                  
+                  //err_gotoxy(5,1);
+                  //Zaehler fuer TWI-Loop
+                  //err_puthex(loopCounterTWI++);
+                  lcd_gotoxy(15,0);
+                  //						lcd_puts("U\0");
+                  lcd_putc(' ');
+                  OSZIBLO;
+                  //err_gotoxy(0,0);
+                  
+                  //err_puts("U\0");
                   
                   // ++++++++++++++++++++++++++++++++
                   // TEST
                   // ++++++++++++++++++++++++++++++++
-                  if (test)
+                  if (test) // 
                   {
                      
                      uint8_t RTC_erfolg=1;
@@ -2663,20 +2751,20 @@ int main (void)
                      
                      SchreibStatus=0;
                      LeseStatus=0;
-
-
+                     
+                     
                      uhrstatus &= ~(1<<SYNC_READY);
                      uhrstatus |= (1<<SYNC_OK);
                      uhrstatus &= ~(1<<SYNC_NEW);                 // TWI soll jetzt Daten senden
                      
-                   }
-						else
+                  }
+                  else
                   {
                      
 #pragma mark Uhr
                      //TWBR=48;
                      if (!(uhrstatus & (1<<SYNC_NULL)))     // Nach reset, rtc noch nicht abfragen
-                        
+                     
                      {
                         uint8_t versuche=0;
                         uint8_t RTC_erfolg=1;
@@ -2739,10 +2827,11 @@ int main (void)
                      
                      //sync start
                      // alle 60 Min: Warten starten
-                     if ((((min/30)&&(min%30==0)&&(std<23))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
+                     //if ((((min/30)&&(min%30==0)&&(std<23))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
+                     if (((min/30)&&(min%30==0)&&(std<23)) && (!(uhrstatus & (1<<SYNC_WAIT))))
                      {
-                         {
-                         //  out_startdaten = SYNCWAITTASK;
+                        {
+                           //  out_startdaten = SYNCWAITTASK;
                            uhrstatus &= ~(1<<SYNC_OK);
                            uhrstatus |= (1<<SYNC_WAIT); // Beginn Sync, Warten starten
                            DCF77_counter=0; // Zaehler fuer korrekte Daten
@@ -2752,7 +2841,7 @@ int main (void)
                            
                            lcd_clr_line(1);
                            lcd_puts("S  ");
-                            lcd_puts(" WAIT");
+                           lcd_puts(" WAIT");
                         }
                         
                      }
@@ -2760,11 +2849,12 @@ int main (void)
                      
                      if (uhrstatus & (1<<SYNC_WAIT)) // Warten auf genuegende Anzahl korrekter Daten
                      {
+                        TWI_FLAG = 0;
                         //uint8_t newminute=0;
                         uint8_t DCF77_erfolg = UhrAbrufen(); // DCF-Uhr abrufen
                         if (DCF77_erfolg) // Fehler
                         {
-                           lcd_gotoxy(16, 1);
+                           err_gotoxy(16, 0);
                            err_puts("DCF\0");
                            err_putc('!');
                            DCF77_counter=0; // zurueck auf Feld 1. Uhr hat einen Fehler, Synchronisation neu starten
@@ -2773,7 +2863,7 @@ int main (void)
                         {
                            lcd_gotoxy(16, 1);
                            lcd_putc('+');
-                           lcd_putint2(DCF77daten[0]);         // Minuten
+                           //lcd_putint2(DCF77daten[0]);         // Minuten
                            // erste Synchronisation?
                            if (uhrstatus & (1<<SYNC_NULL))     // Nach reset, noch keine oldmin ...
                            {
@@ -2782,7 +2872,7 @@ int main (void)
                               oldstd=DCF77daten[1];
                               oldtag=DCF77daten[2];
                               uhrstatus &= ~(1<<SYNC_NULL);
-                              uhrstatus |= (1<<SYNC_NEW);         // TWI soll noch keine Daten uebertragen
+                              //        uhrstatus |= (1<<SYNC_NEW);         // TWI soll noch keine Daten uebertragen
                            }
                            else if (!(oldmin == DCF77daten[0]))   // minute hat sich geaendert
                            {
@@ -2805,7 +2895,7 @@ int main (void)
                                     
                                     DCF77_counter++;
                                     
-                                     
+                                    
                                     lcd_putint1(DCF77_counter);
                                     oldmin=DCF77daten[0];
                                     if (DCF77_counter >= MIN_SYNC) // genuegende Anzahl korrekte Daten
@@ -2843,6 +2933,12 @@ int main (void)
                            
                            
                         } // end DCF77erfolg=0
+                        if (TWI_FLAG >0)
+                        {
+                           err_gotoxy(16,2);
+                           err_puthex(uhrstatus);
+                           err_puthex(TWI_FLAG);
+                        }
                         
                      } // end (uhrstatus & (1<<SYNC_WAIT)
                      
@@ -2850,7 +2946,8 @@ int main (void)
                      
                      if (uhrstatus & (1<<SYNC_READY)) // Uhr ist wieder bereit
                      {
-                    //    out_startdaten = SYNCOKTASK;
+                        TWI_FLAG = 0;
+                        //    out_startdaten = SYNCOKTASK;
                         uint8_t res=0;
                         res=rtc_write_Zeit(DCF77daten[1], DCF77daten[0],0); // stunde, minute, sekunde
                         
@@ -2885,9 +2982,9 @@ int main (void)
                         {
                            SchreibStatus=0;
                            LeseStatus=0;
-                           err_gotoxy(12,0);
+                           err_gotoxy(12,2);
                            err_puts("RTC\0");
-                           //err_putc(' ');
+                           err_putc(' ');
                            err_puthex(RTC_erfolg);
                            err_putc('!');
                            
@@ -2903,11 +3000,18 @@ int main (void)
                            //err_putc(':');
                            //err_putint2(RTCdaten[0]);
                         }
+                        if (TWI_FLAG >0)
+                        {
+                           err_gotoxy(16,2);
+                           err_puthex(uhrstatus);
+                           err_puthex(TWI_FLAG);
+                        }
                         
                      }
                      // Ende Synchronisation
                   } // if NOT test
-						
+                  err_gotoxy(18,2);
+                  err_puthex(TWI_FLAG);
                   
                   outbuffer[46] = RTCdaten[1]; // stunde
                   outbuffer[47] = RTCdaten[0]; // minute
@@ -2920,451 +3024,459 @@ int main (void)
                   uint8_t jahrab2010 = RTCdaten[4]  -10; // Jahr ab 2010
                   jahrab2010 <<=4; // bit
                   outbuffer[41] |= jahrab2010  ;
-
+                  
                   // ++++++++++++++++++++++++++++++++
                   // End NOT TEST
                   // ++++++++++++++++++++++++++++++++		
                   /*
-                  err_gotoxy(0,3);
-                  err_putc('R');
-                  err_putint2(RTCdaten[1]);
-                  err_putc(':');
-                  err_putint2(RTCdaten[0]);
-                  err_putc(' ');
-                  err_putc('D');
-                  err_putint2(DCF77daten[1]);
-                  err_putc(':');
-                  err_putint2(DCF77daten[0]);
+                   err_gotoxy(0,3);
+                   err_putc('R');
+                   err_putint2(RTCdaten[1]);
+                   err_putc(':');
+                   err_putint2(RTCdaten[0]);
+                   err_putc(' ');
+                   err_putc('D');
+                   err_putint2(DCF77daten[1]);
+                   err_putc(':');
+                   err_putint2(DCF77daten[0]);
                    */
                   
                   
-						readSR();				// Liste der abzufragenden Slaves lesen
-						
-						// Nur abfragen, wenn TWI laeuft
-						if (BUS_Status & (1<<TWI_CONTROLBIT))
-						{
-							LeseStatus=Read_Device;
-							SchreibStatus=Write_Device;
-						}
-						else 
-						{
-							SchreibStatus=0; 
-							LeseStatus=0;
-						}
+#pragma mark readSR                        
                   
-                  LeseStatus |= (1<<OG2);
+                  readSR();				// Liste der abzufragenden Slaves lesen
+                  
+                  // Nur abfragen, wenn TWI laeuft
+                  if (BUS_Status & (1<<TWI_CONTROLBIT))
+                  {
+                     LeseStatus=Read_Device;
+                     SchreibStatus=Write_Device;
+                  }
+                  else 
+                  {
+                     SchreibStatus=0; 
+                     LeseStatus=0;
+                  }
+                  /*
+                   LeseStatus |= (1<<OG2);
+                   LeseStatus |= (1<<BUERO);
+                   SchreibStatus |= (1<<OG2);
+                   SchreibStatus |= (1<<BUERO);
+                   */
                   
                   outbuffer[43] = LeseStatus;
                   outbuffer[44] = SchreibStatus;
-
-						
-						err_clr_line(1);
-						err_gotoxy(12,1);
-						err_putc('R');
-						//err_putc(' ');
-						//err_puthex(Read_Device);
-						err_puthex(LeseStatus);
-						err_putc(' ');
-						
-						err_putc('W');
-						//err_putc(' ');
-						//err_puthex(Write_Device);
-						err_puthex(SchreibStatus);
-						
-						// Version anzeigen
-						/*
-						err_gotoxy(0,1);
-						err_puts("V:\0");
-						err_puts(VERSION);
-                  */
-						delay_ms(64);
-						in_startdaten=0;
-						
-						//	******************************
-						//	*	HomeCentral-Slaves abfragen, sofern Schreib- oder Lesestatus gesetzt ist
-						//	******************************
-						
+                  
+                  
+                  err_clr_line(1);
+                  err_gotoxy(12,1);
+                  err_putc('R');
+                  //err_putc(' ');
+                  //err_puthex(Read_Device);
+                  err_puthex(LeseStatus);
+                  err_putc(' ');
+                  
+                  err_putc('W');
+                  //err_putc(' ');
+                  //err_puthex(Write_Device);
+                  err_puthex(SchreibStatus);
+                  
+                  // Version anzeigen
+                  /*
+                   err_gotoxy(0,1);
+                   err_puts("V:\0");
+                   err_puts(VERSION);
+                   */
+                  delay_ms(64);
+                  in_startdaten=0;
+                  
+                  //	******************************
+                  //	*	HomeCentral-Slaves abfragen, sofern Schreib- oder Lesestatus gesetzt ist
+                  //	******************************
+                  
 #pragma mark Lese- und Schreibstatus abarbeiten
-						
-						Write_Err=0;
-						Read_Err=0;
-						EEPROM_Err=0;
-						
+                  
+                  Write_Err=0;
+                  Read_Err=0;
+                  EEPROM_Err=0;
+                  
                   lcd_gotoxy(14,0);
                   lcd_putint2(std);
                   lcd_putc(':');
                   lcd_putint2(min);
-
-						if ((SchreibStatus || LeseStatus)&& (!(uhrstatus & (1<<SYNC_NEW))))		// Uhr nicht gerade am Synchronisieren
-                     // && (twi_HI_count0 >= 0x02))//&&(TastaturCount==0))
-						{
-							OSZIALO;
-							BUS_Status |= (1<<SPI_SENDBIT);
-							out_startdaten= DATATASK;//	C0: Daten sammeln fuer den Webserver
-							
-							
-							// Versuch 12.08: Verblassen des 2*20-LCD verhindern
-							//err_initialize(ERR_FUNCTION_8x2, ERR_CMD_ENTRY_INC, ERR_CMD_ON);
-							
-							twi_Call_count0=0;
-							twi_Reply_count0=0;
-							twi_Stat_count=0; //	Stat_count zurücksetzen
-							
-							{
-								//OSZIAHI;
-								// Ausgangsdaten reseten
-								out_hbdaten=0;
-								out_lbdaten=0;
-								
-								uint8_t i=0;
-								for (i=0 ; i<SPI_BUFSIZE; i++) 
-								{
-									//outbuffer[i]=0;
-								}
-								//err_gotoxy(15,0);
-								//err_putc('U');
-								
-								wdt_reset();
-								//twi_Reply_count0++; // Call ist OK
-								//lcd_clr_part(0,12,19);
-								//lcd_gotoxy(12,0);
-								//lcd_gotoxy(15,0);
-								//lcd_put_zeit(DCF77daten[0],DCF77daten[1]);
-								
-								min= RTCdaten[0];
-								std= RTCdaten[1];
-								tag= RTCdaten[2];
-								
-								lcd_gotoxy(14,0);
-								lcd_putint2(std);
+                  
+                  if ((SchreibStatus || LeseStatus))// && (!(uhrstatus & (1<<SYNC_NEW))))		// Uhr nicht gerade am Synchronisieren
+                  // && (twi_HI_count0 >= 0x02))//&&(TastaturCount==0))
+                  {
+                     TWI_FLAG = 0;
+                     OSZIBLO;
+                     BUS_Status |= (1<<SPI_SENDBIT);
+                     out_startdaten= DATATASK;//	C0: Daten sammeln fuer den Webserver
+                     
+                     
+                     // Versuch 12.08: Verblassen des 2*20-LCD verhindern
+                     //err_initialize(ERR_FUNCTION_8x2, ERR_CMD_ENTRY_INC, ERR_CMD_ON);
+                     
+                     twi_Call_count0=0;
+                     twi_Reply_count0=0;
+                     twi_Stat_count=0; //	Stat_count zurücksetzen
+                     
+                     {
+                        //OSZIAHI;
+                        // Ausgangsdaten reseten
+                        out_hbdaten=0;
+                        out_lbdaten=0;
+                        
+                        uint8_t i=0;
+                        for (i=0 ; i<SPI_BUFSIZE; i++) 
+                        {
+                           //outbuffer[i]=0;
+                        }
+                        //err_gotoxy(15,0);
+                        //err_putc('U');
+                        
+                        wdt_reset();
+                        //twi_Reply_count0++; // Call ist OK
+                        //lcd_clr_part(0,12,19);
+                        //lcd_gotoxy(12,0);
+                        //lcd_gotoxy(15,0);
+                        //lcd_put_zeit(DCF77daten[0],DCF77daten[1]);
+                        
+                        min= RTCdaten[0];
+                        std= RTCdaten[1];
+                        tag= RTCdaten[2];
+                        
+                        lcd_gotoxy(14,0);
+                        lcd_putint2(std);
                         lcd_putc(':');
                         lcd_putint2(min);
-								/*								
-								 min= DCF77daten[0];
-								 std= DCF77daten[1];
-								 tag= DCF77daten[5];
-								 lcd_gotoxy(17,0);
-								 lcd_putint2(min);
-								 */								
-								//uint8_t StundenCode=0;
-								
-								//	Brennerlaufzeit addieren
-								if ((min > Zeit.minute) || ((min ==0)&&(std==0)) || (std> Zeit.stunde) ) //neue Minute oder neue Stunde oder neuer Tag
-								{
-									uint8_t synchfehler=0;
-									//						err_gotoxy(9,0);
-									//						err_puts("A\0");
-									//delay_ms(200);
-									//err_clr_line(1);
-									
-									
-									Zeit.minute = RTCdaten[0];
-									Zeit.stunde = RTCdaten[1];
-									Zeit.kalendertag = RTCdaten[2];
-									Zeit.kalendermonat = RTCdaten[3];
-									Zeit.kalenderjahr = RTCdaten[4];
-									Zeit.wochentag = RTCdaten[5]-1;	// RTC, DCF77: Montag=1; EEPROM: Montag=0
-									
-									// Daten fuer Sync nachfuehren
-									if (!(uhrstatus & (1<<SYNC_WAIT)))
-									{
-										oldmin=RTCdaten[0];
-										oldstd=RTCdaten[1];
-										oldtag=RTCdaten[2];
-									}
-									/*
-									 Zeit.minute = DCF77daten[0];
-									 Zeit.stunde = DCF77daten[1];
-									 Zeit.kalendertag = DCF77daten[2];
-									 Zeit.kalendermonat = DCF77daten[3];
-									 Zeit.kalenderjahr = DCF77daten[4];
-									 Zeit.wochentag = DCF77daten[5]-1;// DCF77 ist 1-basiert ab Sonntag
-									 */
-									
-									synchfehler=DCF77daten[6];
-									//outbuffer[29]=DCF77daten[6];
-									
-									neueZeit=1; //	Zeit in Räumen aktualisieren
-									// 29.9.08						
-									if ((Menu_Ebene & 0xF0)==0) // Oberste Ebene, AnzeigeWochentag aktualisieren
-									{
-										AnzeigeWochentag=Zeit.wochentag;
-										
-									}
-									
-									/*
-									 lcd_clr_part(0,0,14);
-									 if (Zeit.wochentag < 8)
-									 {
-									 lcd_put_wochentag(Zeit.wochentag);
-									 }
-									 lcd_putc(' ');
-									 if (Zeit.kalendertag < 32)
-									 {
-									 lcd_putint2(Zeit.kalendertag);
-									 }
-									 lcd_putc('.');
-									 if (Zeit.kalendermonat < 13)
-									 {
-									 lcd_putint2(Zeit.kalendermonat);
-									 }
-									 lcd_putc('.');
-									 if (Zeit.kalenderjahr<99)
-									 {
-									 lcd_putint2(Zeit.kalenderjahr);
-									 }
-									 //lcd_gotoxy(15,1);
-									 //lcd_put_zeit(Zeit.minute,Zeit.stunde);
-									 */
-									
-									
-									
-									// Uhr-Fehler anzeigen
-									// err_clr_part(0,13,19);
-									// err_puts("S \0");
-									// err_putint(synchfehler);
-									
-									//err_gotoxy(14,0);
-									//err_puts("w \0");
-									//err_puthex(tempWDT_Count);
-									
-								} //Zeit vorwaertsstellen
-								wdt_reset();
-								// end Uhr lesen
-								
-								UhrLesen=0;
-								HeizungRXdaten[6]=0x00;
-								HeizungRXdaten[7]=0x00;
+                        /*								
+                         min= DCF77daten[0];
+                         std= DCF77daten[1];
+                         tag= DCF77daten[5];
+                         lcd_gotoxy(17,0);
+                         lcd_putint2(min);
+                         */								
+                        //uint8_t StundenCode=0;
+                        
+                        //	Brennerlaufzeit addieren
+                        if ((min > Zeit.minute) || ((min ==0)&&(std==0)) || (std> Zeit.stunde) ) //neue Minute oder neue Stunde oder neuer Tag
+                        {
+                           uint8_t synchfehler=0;
+                           //						err_gotoxy(9,0);
+                           //						err_puts("A\0");
+                           //delay_ms(200);
+                           //err_clr_line(1);
+                           
+                           
+                           Zeit.minute = RTCdaten[0];
+                           Zeit.stunde = RTCdaten[1];
+                           Zeit.kalendertag = RTCdaten[2];
+                           Zeit.kalendermonat = RTCdaten[3];
+                           Zeit.kalenderjahr = RTCdaten[4];
+                           Zeit.wochentag = RTCdaten[5]-1;	// RTC, DCF77: Montag=1; EEPROM: Montag=0
+                           
+                           // Daten fuer Sync nachfuehren
+                           if (!(uhrstatus & (1<<SYNC_WAIT)))
+                           {
+                              oldmin=RTCdaten[0];
+                              oldstd=RTCdaten[1];
+                              oldtag=RTCdaten[2];
+                           }
+                           /*
+                            Zeit.minute = DCF77daten[0];
+                            Zeit.stunde = DCF77daten[1];
+                            Zeit.kalendertag = DCF77daten[2];
+                            Zeit.kalendermonat = DCF77daten[3];
+                            Zeit.kalenderjahr = DCF77daten[4];
+                            Zeit.wochentag = DCF77daten[5]-1;// DCF77 ist 1-basiert ab Sonntag
+                            */
+                           
+                           synchfehler=DCF77daten[6];
+                           //outbuffer[29]=DCF77daten[6];
+                           
+                           neueZeit=1; //	Zeit in Räumen aktualisieren
+                           // 29.9.08						
+                           if ((Menu_Ebene & 0xF0)==0) // Oberste Ebene, AnzeigeWochentag aktualisieren
+                           {
+                              AnzeigeWochentag=Zeit.wochentag;
+                              
+                           }
+                           
+                           /*
+                            lcd_clr_part(0,0,14);
+                            if (Zeit.wochentag < 8)
+                            {
+                            lcd_put_wochentag(Zeit.wochentag);
+                            }
+                            lcd_putc(' ');
+                            if (Zeit.kalendertag < 32)
+                            {
+                            lcd_putint2(Zeit.kalendertag);
+                            }
+                            lcd_putc('.');
+                            if (Zeit.kalendermonat < 13)
+                            {
+                            lcd_putint2(Zeit.kalendermonat);
+                            }
+                            lcd_putc('.');
+                            if (Zeit.kalenderjahr<99)
+                            {
+                            lcd_putint2(Zeit.kalenderjahr);
+                            }
+                            //lcd_gotoxy(15,1);
+                            //lcd_put_zeit(Zeit.minute,Zeit.stunde);
+                            */
+                           
+                           
+                           
+                           // Uhr-Fehler anzeigen
+                           // err_clr_part(0,13,19);
+                           // err_puts("S \0");
+                           // err_putint(synchfehler);
+                           
+                           //err_gotoxy(14,0);
+                           //err_puts("w \0");
+                           //err_puthex(tempWDT_Count);
+                           
+                        } //Zeit vorwaertsstellen
+                        wdt_reset();
+                        // end Uhr lesen
+                        
+                        UhrLesen=0;
+                        HeizungRXdaten[6]=0x00;
+                        HeizungRXdaten[7]=0x00;
 #pragma mark Heizung					
-								//	*************
-								//	*	Heizung
-								//	*************
-								OSZIAHI;
-								delay_ms(1);
-								OSZIALO;
-								uint8_t HeizungStundencode=0;
-								uint8_t RinneStundencode=0;
-								if (SchreibStatus & (1<< HEIZUNG))	//schreiben an Heizung
-								{
-									delay_ms(2);
-									/*
-									 Byte 0:	Heizungsstatus 
-									 
-									 Bit 0,1: Brenner ON/OFF
-									 Bit 2		Halbstunde
-									 Bit 3:	Mode Tag/Nacht-Einstellung
-									 
-									 */
-									//err_gotoxy(0,1);
-									//err_puts("H\0");
-									
-									uint8_t tagblock[buffer_size];
-									uint8_t Stundencode=0;
-									txbuffer[0]=0;
-									
-									// Brenner-Tagplan lesen
-									
-									wdt_reset();
-									
-									// code fuer Objekt 0 aus EEPROM lesen, 8 bytes
-									
+                        //	*************
+                        //	*	Heizung
+                        //	*************
+                        //OSZIAHI;
+                        delay_ms(1);
+                        OSZIALO;
+                        uint8_t HeizungStundencode=0;
+                        uint8_t RinneStundencode=0;
+                        if (SchreibStatus & (1<< HEIZUNG))	//schreiben an Heizung
+                        {
+                           TWI_FLAG = 0;
+                           delay_ms(2);
+                           /*
+                            Byte 0:	Heizungsstatus 
+                            
+                            Bit 0,1: Brenner ON/OFF
+                            Bit 2		Halbstunde
+                            Bit 3:	Mode Tag/Nacht-Einstellung
+                            
+                            */
+                           //err_gotoxy(0,1);
+                           //err_puts("H\0");
+                           
+                           uint8_t tagblock[buffer_size];
+                           uint8_t Stundencode=0;
+                           txbuffer[0]=0;
+                           
+                           // Brenner-Tagplan lesen
+                           
+                           wdt_reset();
+                           
+                           // code fuer Objekt 0 aus EEPROM lesen, 8 bytes
+                           
                            // EEPROM_WOCHENPLAN_ADRESSE: A0
                            // HEIZUNG: 0
                            // Objekt: 0
                            // Tag:Zeit.wochentag
                            // xyz > uint_t16 code = Raum*100 + objekt*10 + Tag
-
-									uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock, HEIZUNG, 0, Zeit.wochentag);
                            
-									//OSZIAHI;
-									delay_ms(1);
-									//OSZIALO;
-									//err_puthex(erfolg);
-									wdt_reset();
-									if (erfolg==0)
-									{
-										
-										Stundencode=Tagplanwert(tagblock, Zeit.stunde); // Stundencode fuer aktuelle Stunde
-										
-										HeizungStundencode=Tagplanwert(tagblock, Zeit.stunde);
-										
+                           uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock, HEIZUNG, 0, Zeit.wochentag);
+                           
+                           //OSZIAHI;
+                           delay_ms(1);
+                           //OSZIALO;
+                           //err_puthex(erfolg);
+                           wdt_reset();
+                           if (erfolg==0)
+                           {
+                              
+                              Stundencode=Tagplanwert(tagblock, Zeit.stunde); // Stundencode fuer aktuelle Stunde
+                              
+                              HeizungStundencode=Tagplanwert(tagblock, Zeit.stunde);
+                              
                               //err_gotoxy(0,1);
-										//err_puts("            \0");
-										
-										//err_gotoxy(0,0);
-										//err_putc('W');
-										//err_puthex(Zeit.wochentag);
-										//err_putc(':');
-										//err_putc('H');
-										//err_puthex(HeizungStundencode);
-										//			01 zweite halbe Stunde ON
-										//			10	erste halbe Stunde ON
-										//			11	ganze Stunde ON
-										//err_putc(':');
-										
-										
-										//Echo = HeizungStundencode;
-										
-										HeizungStundencode &= 0x03; // Bit 0 und 1 filtern
-										//outbuffer[27] = HeizungStundencode;
-										
-										
-										//err_puts(" c\0");
-										//err_puthex(Stundencode);
-										txbuffer[0]=0;
-										switch (Zeit.minute/30)
-										{
-											case 0: // erste halbe Stunde  |_
-											{
-												
-												txbuffer[0]=(Stundencode >=2); //Werte 2: erste halbe Std, 3: ganze Std auf FULL Wert 0: Brenner RED/OFF
-												// 
-												// Bit 3 fuer Anzeige der Halbstunde ist Null
-											}break;
-												
-											case 1: // zweite halbe Stunde _|
-											{
-												txbuffer[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1: zweite halbe Std, 3: ganze Std auf FULL Wert 0: Brenner RED/OFF
-												HeizungStundencode |= (1<<3);	// Bit 3 fuer Anzeige der Halbstunde ist 1
-											}break;
-												
-											default:
-											{
-												txbuffer[0]=0; // 7.4.11
-												
-											}break;
-										}//switch
-										
-										//err_putc('B');
-										//err_puthex(txbuffer[0]);
-										
-										// An Heizung wird nur der jeweilige Wert fuer die Uhr weitergegeben: 
-										// 
-										outbuffer[28] = txbuffer[0];
-										
-										// HeizungStundencode wird an HomeServer weitergegeben
-										
-										//err_gotoxy(7,1);
-										//err_puthex(txbuffer[0]);
-									}//erfolg ==0
-									else
-									{
-										//							err_gotoxy(1,1);
-										//							err_puts("X\0");	//	Wochentag lesen
-										// SPI senden verhindern
-										
-										spistatus |= (1<<TWI_ERR_BIT);
-										EEPROM_Err |= (1<<HEIZUNG);
-										
-									}
-									
-									// end Objekt 0
-									
-									// Code fuer Objekt 1 lesen: Tag/Nacht-Mode der Heizung
-									
-									uint8_t tagblock1[buffer_size];
-									uint8_t Stundencode1=0;	
-									uint8_t obj1erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock1, HEIZUNG, 1, Zeit.wochentag);
-									//OSZIAHI;
-									delay_ms(1);
-									//OSZIALO;
-									if (obj1erfolg==0) // EEPROM erfolgreich gelesen
-									{
-										Stundencode1=Tagplanwert(tagblock1, Zeit.stunde);
-										
-										//				outbuffer[27] = Stundencode1; // auskomm 9.4.11
-										//Simulation
-										
-										//Stundencode1=Zeit.minute % 5;
-										txbuffer[3]=0;
-										Stundencode1 &= 0x03;	// Bit 0 und 1 filtern
-										switch (Stundencode1)
-										{
-											case 0: // Grundstellung, Tag ON, Nacht OFF
-												txbuffer[3] = 0x01; // Schalterposition 1
-												break;
-												
-											case 1: // Tag ON, Nacht Red
-												txbuffer[3] = 0x02; // Schalterposition 2
-												break;
-												
-											case 2:
-												txbuffer[3] = 0x04; // Schalterposition 4
-												break;
-												
-												
-										}// switch Stundencode1
-										
-										
-										// Test
-										if  (test)
-										{
-											Testposition = (PINB & 0xE0); // Bit 5,6,7 von Port B
-											Testposition >>= 5;
-											//err_clr_line(0);
-											//delay_ms(100);
-											//err_gotoxy(0,0);
-											//err_puts("pos:\0");
-											
-											//err_puthex(Testposition);
-											txbuffer[3]=Testposition;										
-										}
-										
-										Stundencode1 <<=4;			// Bit 4 bis 5 in Heizungsstundencode fuer Mode
-										
-										HeizungStundencode |= Stundencode1;
-										
-										
-										
-										
-									} // erfolg==0
-									else
-									{
-										// SPI senden verhindern
-										spistatus |= (1<<TWI_ERR_BIT);
-										EEPROM_Err |= (1<<HEIZUNG);
-									}
-									
-									// end Objekt 1
-									
-									// Code fuer Objekt 2 lesen: Dachrinnenheizung
-									
-									uint8_t tagblock2[buffer_size];
-									uint8_t obj2erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock2, HEIZUNG, 2, Zeit.wochentag);
-									//OSZIAHI;
-									delay_ms(1);
-									//OSZIALO;
-									if (obj2erfolg==0) // EEPROM erfolgreich gelesen
-									{
-										RinneStundencode=Tagplanwert(tagblock2, Zeit.stunde);
-										
-										//	outbuffer[30] = RinneStundencode; // auskomm 7.4.11
-										
-										//err_gotoxy(0,1);
-										//err_puts("         \0");
-										//err_gotoxy(0,1);
-										//err_puts("Ri:\0");
-										//err_puthex(RinneStundencode);
-										RinneStundencode &= 0x03;	// Bit 0 und 1 filtern fuer outbuffer[5]
-										
-										//err_putc(' ');
-										//err_puthex(RinneStundencode);
+                              //err_puts("            \0");
+                              
+                              //err_gotoxy(0,0);
+                              //err_putc('W');
+                              //err_puthex(Zeit.wochentag);
+                              //err_putc(':');
+                              //err_putc('H');
+                              //err_puthex(HeizungStundencode);
+                              //			01 zweite halbe Stunde ON
+                              //			10	erste halbe Stunde ON
+                              //			11	ganze Stunde ON
+                              //err_putc(':');
+                              
+                              
+                              //Echo = HeizungStundencode;
+                              
+                              HeizungStundencode &= 0x03; // Bit 0 und 1 filtern
+                              //outbuffer[27] = HeizungStundencode;
+                              
+                              
+                              //err_puts(" c\0");
+                              //err_puthex(Stundencode);
+                              txbuffer[0]=0;
+                              switch (Zeit.minute/30)
+                              {
+                                    case 0: // erste halbe Stunde  |_
+                                 {
+                                    
+                                    txbuffer[0]=(Stundencode >=2); //Werte 2: erste halbe Std, 3: ganze Std auf FULL Wert 0: Brenner RED/OFF
+                                    // 
+                                    // Bit 3 fuer Anzeige der Halbstunde ist Null
+                                 }break;
+                                    
+                                    case 1: // zweite halbe Stunde _|
+                                 {
+                                    txbuffer[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1: zweite halbe Std, 3: ganze Std auf FULL Wert 0: Brenner RED/OFF
+                                    HeizungStundencode |= (1<<3);	// Bit 3 fuer Anzeige der Halbstunde ist 1
+                                 }break;
+                                    
+                                 default:
+                                 {
+                                    txbuffer[0]=0; // 7.4.11
+                                    
+                                 }break;
+                              }//switch
+                              
+                              //err_putc('B');
+                              //err_puthex(txbuffer[0]);
+                              
+                              // An Heizung wird nur der jeweilige Wert fuer die Uhr weitergegeben: 
+                              // 
+                              outbuffer[28] = txbuffer[0];
+                              
+                              // HeizungStundencode wird an HomeServer weitergegeben
+                              
+                              //err_gotoxy(7,1);
+                              //err_puthex(txbuffer[0]);
+                           }//erfolg ==0
+                           else
+                           {
+                              //							err_gotoxy(1,1);
+                              //							err_puts("X\0");	//	Wochentag lesen
+                              // SPI senden verhindern
+                              
+                              spistatus |= (1<<TWI_ERR_BIT);
+                              EEPROM_Err |= (1<<HEIZUNG);
+                              
+                           }
+                           
+                           // end Objekt 0
+                           
+                           // Code fuer Objekt 1 lesen: Tag/Nacht-Mode der Heizung
+                           
+                           uint8_t tagblock1[buffer_size];
+                           uint8_t Stundencode1=0;	
+                           uint8_t obj1erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock1, HEIZUNG, 1, Zeit.wochentag);
+                           //OSZIAHI;
+                           delay_ms(1);
+                           //OSZIALO;
+                           if (obj1erfolg==0) // EEPROM erfolgreich gelesen
+                           {
+                              Stundencode1=Tagplanwert(tagblock1, Zeit.stunde);
+                              
+                              //				outbuffer[27] = Stundencode1; // auskomm 9.4.11
+                              //Simulation
+                              
+                              //Stundencode1=Zeit.minute % 5;
+                              txbuffer[3]=0;
+                              Stundencode1 &= 0x03;	// Bit 0 und 1 filtern
+                              switch (Stundencode1)
+                              {
+                                    case 0: // Grundstellung, Tag ON, Nacht OFF
+                                    txbuffer[3] = 0x01; // Schalterposition 1
+                                    break;
+                                    
+                                    case 1: // Tag ON, Nacht Red
+                                    txbuffer[3] = 0x02; // Schalterposition 2
+                                    break;
+                                    
+                                    case 2:
+                                    txbuffer[3] = 0x04; // Schalterposition 4
+                                    break;
+                                    
+                                    
+                              }// switch Stundencode1
+                              
+                              
+                              // Test
+                              if  (test)
+                              {
+                                 Testposition = (PINB & 0xE0); // Bit 5,6,7 von Port B
+                                 Testposition >>= 5;
+                                 //err_clr_line(0);
+                                 //delay_ms(100);
+                                 //err_gotoxy(0,0);
+                                 //err_puts("pos:\0");
+                                 
+                                 //err_puthex(Testposition);
+                                 txbuffer[3]=Testposition;										
+                              }
+                              
+                              Stundencode1 <<=4;			// Bit 4 bis 5 in Heizungsstundencode fuer Mode
+                              
+                              HeizungStundencode |= Stundencode1;
+                              
+                              
+                              
+                              
+                           } // erfolg==0
+                           else
+                           {
+                              // SPI senden verhindern
+                              spistatus |= (1<<TWI_ERR_BIT);
+                              EEPROM_Err |= (1<<HEIZUNG);
+                           }
+                           
+                           // end Objekt 1
+                           
+                           // Code fuer Objekt 2 lesen: Dachrinnenheizung
+                           
+                           uint8_t tagblock2[buffer_size];
+                           uint8_t obj2erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock2, HEIZUNG, 2, Zeit.wochentag);
+                           //OSZIAHI;
+                           delay_ms(1);
+                           //OSZIALO;
+                           if (obj2erfolg==0) // EEPROM erfolgreich gelesen
+                           {
+                              RinneStundencode=Tagplanwert(tagblock2, Zeit.stunde);
+                              
+                              //	outbuffer[30] = RinneStundencode; // auskomm 7.4.11
+                              
+                              //err_gotoxy(0,1);
+                              //err_puts("         \0");
+                              //err_gotoxy(0,1);
+                              //err_puts("Ri:\0");
+                              //err_puthex(RinneStundencode);
+                              RinneStundencode &= 0x03;	// Bit 0 und 1 filtern fuer outbuffer[5]
+                              
+                              //err_putc(' ');
+                              //err_puthex(RinneStundencode);
                               // Code fuer Rinne an Heizung schicken
-										if (RinneStundencode)
-										{
-											txbuffer[2] = 0x01;
-										}
-										else
-										{
-											txbuffer[2] = 0x00;
-										}
-									}
-									else
-									{
-										// SPI senden verhindern
-										spistatus |= (1<<TWI_ERR_BIT);
-										EEPROM_Err |= (1<<HEIZUNG);
-									}
+                              if (RinneStundencode)
+                              {
+                                 txbuffer[2] = 0x01;
+                              }
+                              else
+                              {
+                                 txbuffer[2] = 0x00;
+                              }
+                           }
+                           else
+                           {
+                              // SPI senden verhindern
+                              spistatus |= (1<<TWI_ERR_BIT);
+                              EEPROM_Err |= (1<<HEIZUNG);
+                           }
                            
                            /*
                             Byte 6 lesen
@@ -3382,20 +3494,20 @@ int main (void)
                            /*
                             PWM lesen
                             */
- 									uint8_t tagblock3[buffer_size];
-									uint8_t obj3erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock3, HEIZUNG, 3, 0);
-									//OSZIAHI;
-									delay_ms(1);
-                          
+                           uint8_t tagblock3[buffer_size];
+                           uint8_t obj3erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock3, HEIZUNG, 3, 0);
+                           //OSZIAHI;
+                           delay_ms(1);
+                           
                            if (obj3erfolg==0) // EEPROM erfolgreich gelesen
-									{
+                           {
                               
-										//err_gotoxy(0,1);
-										//err_puts("         \0");
-										//err_gotoxy(0,1);
-										//err_puts("PWM:\0");
+                              //err_gotoxy(0,1);
+                              //err_puts("         \0");
+                              //err_gotoxy(0,1);
+                              //err_puts("PWM:\0");
                               uint8_t pwmcode = tagblock3[0];
-										//err_puthex(pwmcode);
+                              //err_puthex(pwmcode);
                               pwmcode = tagblock3[1];
                               //err_puthex(pwmcode);
                               pwmcode = tagblock3[2];
@@ -3410,164 +3522,170 @@ int main (void)
                            /*
                             end PWM
                             */
-									
-									// end Objekt 2
-									//err_gotoxy(0,8);
-									//err_puts("pos:\0");
-									//err_puthex(txbuffer[3]);
-									
-									
-									
-									wdt_reset();
-									twi_Call_count0++;
-									
+                           
+                           // end Objekt 2
+                           //err_gotoxy(0,8);
+                           //err_puts("pos:\0");
+                           //err_puthex(txbuffer[3]);
+                           
+                           
+                           
+                           wdt_reset();
+                           twi_Call_count0++;
+                           
                            // txbuffer an Zeizung schicken
-
+                           
                            erfolg=SlaveSchreiben(HEIZUNG_ADRESSE);
-									
+                           
                            //OSZIAHI;
-									delay_ms(1);
-									//OSZIALO;
-									//err_puthex(txbuffer[3]);
-									wdt_reset();
-									if (erfolg)
-									{
-										//err_clr_part(1,9,19);
-										//err_puts("w Hz err\0");
-										//err_puthex(erfolg);					
-										//err_gotoxy(1,1);
-										//err_puts("Y\0");	//	Schreiben
-										Write_Err |= (1<<HEIZUNG);
-										spistatus |= (1<<TWI_ERR_BIT);
-									}
-									else
-									{
-										twi_Reply_count0++;
-										
-									}
-									
-									txbuffer[0]=0;
-									txbuffer[2]=0;
+                           delay_ms(1);
+                           //OSZIALO;
+                           //err_puthex(txbuffer[3]);
+                           wdt_reset();
+                           if (erfolg)
+                           {
+                              //err_clr_part(1,9,19);
+                              //err_puts("w Hz err\0");
+                              //err_puthex(erfolg);					
+                              //err_gotoxy(1,1);
+                              //err_puts("Y\0");	//	Schreiben
+                              Write_Err |= (1<<HEIZUNG);
+                              spistatus |= (1<<TWI_ERR_BIT);
+                           }
+                           else
+                           {
+                              twi_Reply_count0++;
+                              
+                           }
+                           
+                           txbuffer[0]=0;
+                           txbuffer[2]=0;
                            
                            
-									
-									SchreibStatus &= ~(1<< HEIZUNG); // Flag zuruecksetzen
-									Write_Device &= ~(1<< HEIZUNG); // Flag zuruecksetzen
-								}
-								
-								//OSZIAHI;
-								delay_ms(1);
-								//OSZIALO;
-								if (LeseStatus & (1<< HEIZUNG))	//lesen von Heizung
-								{
-									delay_ms(2);
-									//						err_gotoxy(0,1);
-									//						err_puts("H\0");
-									wdt_reset();
-									twi_Call_count0++;
-									uint8_t Heizungerfolg=SlavedatenLesen(HEIZUNG_ADRESSE,HeizungRXdaten);
-									//OSZIAHI;
-									delay_ms(1);
-									//OSZIALO;
-									
-									wdt_reset();
-									
-									
-									//err_putint1(adcerfolg);
-									if (Heizungerfolg) // Fehler
-									{
-										Read_Err |= (1<<HEIZUNG);
-										spistatus |= (1<<TWI_ERR_BIT);
-									}
-									else
-									{
-										//							err_gotoxy(2,1);
-										//							err_puts("1\0");						
-										twi_Reply_count0++;
-										// Echo zeigen
-										/*
-										err_gotoxy(7,0);
-										err_putc(':');
-										err_putc('E');
-										err_puts("  \0");
-										err_gotoxy(9,0);
-										Echo = HeizungRXdaten[6];
-										err_puthex(Echo);
-										*/
-									}
-									
-									
-									//	Bit 0, 1	TagWert fuer Stunde
-									//	Bit 3 fuer aktuelle Lage innerhalb der Stunde einfuegen: 0: erste halbe Stunde 1: zweite halbe Stunde
-									wdt_reset();
-									//err_gotoxy(4,1);
-									//err_puts("D3");
-									//err_puthex(HeizungRXdaten[3]);
-									
-									//err_gotoxy(12,1);
-									//err_puts("Ri\0");
-									//err_puthex(RinneStundencode);
-									RinneStundencode &= 0x03;	// Bit 0 und 1 filtern fuer outbuffer[5]
-									//err_puthex(RinneStundencode);
-									
-									
-									// Verschieben auf Bit 6,7
-									RinneStundencode <<=6; 
-									
-									uint8_t dataerfolg=0;
-									wdt_reset();
-									if (dataerfolg)
-									{
-										i2c_stop();
-										//delay_ms(800);
-									}
-									else
-									{
-										//								err_gotoxy(17,1);
-										//								err_puts("1\0");						
-										//					twi_Reply_count0++;
-									}
-									
-#pragma mark outbuffer										
-									//out_startdaten=DATATASK;
-									outbuffer[0] = (HEIZUNG << 5);					// Bit 5-7: Raumnummer
-									outbuffer[0] |= (Zeit.stunde & 0x1F);			//	Bit 0-4: Stunde, 5 bit
-									outbuffer[1] = (0x01 << 6);						// Bits 6,7: Art=1
-									outbuffer[1] |= Zeit.minute & 0x3F;				// Bits 0-5: Minute, 6 bit
-									outbuffer[2] = HeizungRXdaten[0];				//	Vorlauf
-									
-									outbuffer[3] = HeizungRXdaten[1];				//	Rücklauf
-									outbuffer[4] = HeizungRXdaten[2];				//	Aussen
-									outbuffer[5] = 0;
-									outbuffer[5] |= HeizungRXdaten[3];				//	Brennerstatus Bit 2
-									outbuffer[5] |= HeizungStundencode;				// Bit 4, 5 gefiltert aus Tagplanwert von Brenner und Mode
-									outbuffer[5] |= RinneStundencode;				// Bit 6, 7 gefiltert aus Tagplanwert von Rinne
-									
-									outbuffer[6] = 0x00;                       // eventuell err von RTC
-									outbuffer[7] = 0x00;	// offen
-									
-									//	outbuffer[29] = Echo;// 7.4.11 auskomm.
-									//outbuffer[23] |= Zeit.minute & 0x3F;				// Bits 0-5: Minute, 6 bit
-									RinneStundencode=0;
-									LeseStatus &= ~(1<< HEIZUNG);// Flag zuruecksetzen
-									Read_Device &= ~(1<< HEIZUNG);// Flag zuruecksetzen
-								}
-								err_gotoxy(0,1);
-								err_puts("         \0");
-								
+                           
+                           SchreibStatus &= ~(1<< HEIZUNG); // Flag zuruecksetzen
+                           Write_Device &= ~(1<< HEIZUNG); // Flag zuruecksetzen
+                           if (TWI_FLAG >0)
+                           {
+                              err_gotoxy(16,2);
+                              err_puthex(HEIZUNG);
+                              err_puthex(TWI_FLAG);
+                           }
+                        }
+                        
+                        //OSZIAHI;
+                        delay_ms(1);
+                        //OSZIALO;
+                        if (LeseStatus & (1<< HEIZUNG))	//lesen von Heizung
+                        {
+                           delay_ms(2);
+                           //						err_gotoxy(0,1);
+                           //						err_puts("H\0");
+                           wdt_reset();
+                           twi_Call_count0++;
+                           uint8_t Heizungerfolg=SlavedatenLesen(HEIZUNG_ADRESSE,HeizungRXdaten);
+                           //OSZIAHI;
+                           delay_ms(1);
+                           //OSZIALO;
+                           
+                           wdt_reset();
+                           
+                           
+                           //err_putint1(adcerfolg);
+                           if (Heizungerfolg) // Fehler
+                           {
+                              Read_Err |= (1<<HEIZUNG);
+                              spistatus |= (1<<TWI_ERR_BIT);
+                           }
+                           else
+                           {
+                              //							err_gotoxy(2,1);
+                              //							err_puts("1\0");						
+                              twi_Reply_count0++;
+                              // Echo zeigen
+                              /*
+                               err_gotoxy(7,0);
+                               err_putc(':');
+                               err_putc('E');
+                               err_puts("  \0");
+                               err_gotoxy(9,0);
+                               Echo = HeizungRXdaten[6];
+                               err_puthex(Echo);
+                               */
+                           }
+                           
+                           
+                           //	Bit 0, 1	TagWert fuer Stunde
+                           //	Bit 3 fuer aktuelle Lage innerhalb der Stunde einfuegen: 0: erste halbe Stunde 1: zweite halbe Stunde
+                           wdt_reset();
+                           //err_gotoxy(4,1);
+                           //err_puts("D3");
+                           //err_puthex(HeizungRXdaten[3]);
+                           
+                           //err_gotoxy(12,1);
+                           //err_puts("Ri\0");
+                           //err_puthex(RinneStundencode);
+                           RinneStundencode &= 0x03;	// Bit 0 und 1 filtern fuer outbuffer[5]
+                           //err_puthex(RinneStundencode);
+                           
+                           
+                           // Verschieben auf Bit 6,7
+                           RinneStundencode <<=6; 
+                           
+                           uint8_t dataerfolg=0;
+                           wdt_reset();
+                           if (dataerfolg)
+                           {
+                              i2c_stop();
+                              //delay_ms(800);
+                           }
+                           else
+                           {
+                              //								err_gotoxy(17,1);
+                              //								err_puts("1\0");						
+                              //					twi_Reply_count0++;
+                           }
+                           
+#pragma mark outbuffer Heizung										
+                           //out_startdaten=DATATASK;
+                           outbuffer[0] = (HEIZUNG << 5);					// Bit 5-7: Raumnummer
+                           outbuffer[0] |= (Zeit.stunde & 0x1F);			//	Bit 0-4: Stunde, 5 bit
+                           outbuffer[1] = (0x01 << 6);						// Bits 6,7: Art=1
+                           outbuffer[1] |= Zeit.minute & 0x3F;				// Bits 0-5: Minute, 6 bit
+                           outbuffer[2] = HeizungRXdaten[0];				//	Vorlauf
+                           
+                           outbuffer[3] = HeizungRXdaten[1];				//	Rücklauf
+                           outbuffer[4] = HeizungRXdaten[2];				//	Aussen
+                           outbuffer[5] = 0;
+                           outbuffer[5] |= HeizungRXdaten[3];				//	Brennerstatus Bit 2
+                           outbuffer[5] |= HeizungStundencode;				// Bit 4, 5 gefiltert aus Tagplanwert von Brenner und Mode
+                           outbuffer[5] |= RinneStundencode;				// Bit 6, 7 gefiltert aus Tagplanwert von Rinne
+                           
+                           outbuffer[6] = 0x00;                       // eventuell err von RTC
+                           outbuffer[7] = 0x00;	// offen
+                           
+                           //	outbuffer[29] = Echo;// 7.4.11 auskomm.
+                           //outbuffer[23] |= Zeit.minute & 0x3F;				// Bits 0-5: Minute, 6 bit
+                           RinneStundencode=0;
+                           LeseStatus &= ~(1<< HEIZUNG);// Flag zuruecksetzen
+                           Read_Device &= ~(1<< HEIZUNG);// Flag zuruecksetzen
+                        }
+                        err_gotoxy(0,1);
+                        err_puts("         \0");
+                        
 #pragma mark Werkstatt					
-								//	*****************
-								//	**	Werkstatt
-								//	*****************
-								//OSZIAHI;
-								//delay_ms(1);
-								//OSZIALO;
-								
-								if (SchreibStatus & (1<< WERKSTATT))	//schreiben an Werkstatt
-								{	
-									delay_ms(2);
-									//						err_gotoxy(4,1);
-									//						err_puts("W\0");
+                        //	*****************
+                        //	**	Werkstatt
+                        //	*****************
+                        //OSZIAHI;
+                        //delay_ms(1);
+                        //OSZIALO;
+                        
+                        if (SchreibStatus & (1<< WERKSTATT))	//schreiben an Werkstatt
+                        {	
+                           delay_ms(2);
+                           //						err_gotoxy(4,1);
+                           //						err_puts("W\0");
                            /*
                             Status byte 18
                             bit 0:   Lampe
@@ -3576,68 +3694,68 @@ int main (void)
                             
                             */
                            uint8_t werkstattrxstatus=0;// Status aus EEPROM
-									uint8_t Werkstatttagblock[buffer_size];
-									uint8_t Stundencode=0;
-									txbuffer[0]=0;
-									wdt_reset();
-									uint8_t erfolg=0;
-									
-									// Objekt 0: Lampe
-									
-									erfolg = WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, Werkstatttagblock, WERKSTATT, 0, Zeit.wochentag);
-									//err_puthex(erfolg);
-									wdt_reset();
-									if (erfolg==0)
-									{
-										Stundencode=Tagplanwert(Werkstatttagblock, Zeit.stunde);
-										//err_puts(" c\0");
-										//err_puthex(Stundencode);
-										switch (Zeit.minute/30)
-										{
-											case 0: // erste halbe Stunde
-											{
-												if (Stundencode >=2)	//	Werte 2, 3: Lampe FULL Wert 0: Lampe OFF
-												{
-													txbuffer[0] |= (1<< 0); // Bit 0 setzen
+                           uint8_t Werkstatttagblock[buffer_size];
+                           uint8_t Stundencode=0;
+                           txbuffer[0]=0;
+                           wdt_reset();
+                           uint8_t erfolg=0;
+                           
+                           // Objekt 0: Lampe
+                           
+                           erfolg = WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, Werkstatttagblock, WERKSTATT, 0, Zeit.wochentag);
+                           //err_puthex(erfolg);
+                           wdt_reset();
+                           if (erfolg==0)
+                           {
+                              Stundencode=Tagplanwert(Werkstatttagblock, Zeit.stunde);
+                              //err_puts(" c\0");
+                              //err_puthex(Stundencode);
+                              switch (Zeit.minute/30)
+                              {
+                                    case 0: // erste halbe Stunde
+                                 {
+                                    if (Stundencode >=2)	//	Werte 2, 3: Lampe FULL Wert 0: Lampe OFF
+                                    {
+                                       txbuffer[0] |= (1<< 0); // Bit 0 setzen
                                        werkstattrxstatus |= (1<< 0);
-												}
-												else
-												{
-													txbuffer[0] &= ~(1<< 0); // Bit 0 zuruecksetzen
-												}
-											}break;
-												
-											case 1: // zweite halbe Stunde
-											{
-												
-												if ((Stundencode ==1)||(Stundencode==3))//Werte 1, 3: Brenner auf FULL Wert 0: Lampe OFF
-												{
-													txbuffer[0] |= (1<< 0); // Bit 0 setzen
+                                    }
+                                    else
+                                    {
+                                       txbuffer[0] &= ~(1<< 0); // Bit 0 zuruecksetzen
+                                    }
+                                 }break;
+                                    
+                                    case 1: // zweite halbe Stunde
+                                 {
+                                    
+                                    if ((Stundencode ==1)||(Stundencode==3))//Werte 1, 3: Brenner auf FULL Wert 0: Lampe OFF
+                                    {
+                                       txbuffer[0] |= (1<< 0); // Bit 0 setzen
                                        werkstattrxstatus |= (1<< 0);
-												}
-												else
-												{
-													txbuffer[0] &= ~(1<< 0); // Bit 0 zuruecksetzen
-												}
-												
-											}break;
-										}//switch
-										
-									}//erfolg
-									else
-									{
-										EEPROM_Err |= (1<<WERKSTATT);
+                                    }
+                                    else
+                                    {
+                                       txbuffer[0] &= ~(1<< 0); // Bit 0 zuruecksetzen
+                                    }
+                                    
+                                 }break;
+                              }//switch
+                              
+                           }//erfolg
+                           else
+                           {
+                              EEPROM_Err |= (1<<WERKSTATT);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									
-									// Objekt 1: Ofen
-									txbuffer[1]=0;
-									erfolg = WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, Werkstatttagblock, WERKSTATT, 1, Zeit.wochentag);
-									//err_puthex(erfolg);
-									wdt_reset();
-									if (erfolg==0)
-									{
-										int OfenStundencode=Tagplanwert(Werkstatttagblock, Zeit.stunde);
+                           }
+                           
+                           // Objekt 1: Ofen
+                           txbuffer[1]=0;
+                           erfolg = WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, Werkstatttagblock, WERKSTATT, 1, Zeit.wochentag);
+                           //err_puthex(erfolg);
+                           wdt_reset();
+                           if (erfolg==0)
+                           {
+                              int OfenStundencode=Tagplanwert(Werkstatttagblock, Zeit.stunde);
                               OfenStundencode &= 0x03;	// Bit 0 und 1 filtern fuer TXdaten[1]
                               
                               if (OfenStundencode) // Stundenwert ist >0, Ofen ein
@@ -3647,58 +3765,58 @@ int main (void)
                               }
                               else
                               {
-                                // txbuffer[0] &= ~(1<< 1); // Bit 1 zuruecksetzen
+                                 // txbuffer[0] &= ~(1<< 1); // Bit 1 zuruecksetzen
                               }
                               
                               txbuffer[1]= OfenStundencode;
-									}//erfolg
-									else
-									{
-										//err_gotoxy(5,1);
-										//err_puts("X\0");
-										//err_putint1(txbuffer[0]);
-										//err_clr_part(1,9,19);
-										//err_puts("wl H er\0");
-										//err_puthex(erfolg);
-										//delay_ms(800);
-										EEPROM_Err |= (1<<WERKSTATT);
+                           }//erfolg
+                           else
+                           {
+                              //err_gotoxy(5,1);
+                              //err_puts("X\0");
+                              //err_putint1(txbuffer[0]);
+                              //err_clr_part(1,9,19);
+                              //err_puts("wl H er\0");
+                              //err_puthex(erfolg);
+                              //delay_ms(800);
+                              EEPROM_Err |= (1<<WERKSTATT);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									// end Objekt 1						
-
-									wdt_reset();
-									twi_Call_count0++;
-									erfolg=SlaveSchreiben(WERKSTATT_ADRESSE);
-									wdt_reset();
-									if (erfolg)
-									{
-										Write_Err |= (1<<WERKSTATT);
+                           }
+                           // end Objekt 1						
+                           
+                           wdt_reset();
+                           twi_Call_count0++;
+                           erfolg=SlaveSchreiben(WERKSTATT_ADRESSE);
+                           wdt_reset();
+                           if (erfolg)
+                           {
+                              Write_Err |= (1<<WERKSTATT);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									else
-									{
-										twi_Reply_count0++;
-									}
-									txbuffer[0]=0;
+                           }
+                           else
+                           {
+                              twi_Reply_count0++;
+                           }
+                           txbuffer[0]=0;
                            txbuffer[1]=0;
 #pragma mark PWM
                            /*
                             PWM lesen
                             */
- 									uint8_t tagblock3[buffer_size];
+                           uint8_t tagblock3[buffer_size];
                            // EEPROM_WOCHENPLAN_ADRESSE, tagblock, raum, objekt, Wochentag
-									uint8_t obj3erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock3, WERKSTATT, 3, 0);
-									//OSZIAHI;
-									delay_ms(1);
+                           uint8_t obj3erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock3, WERKSTATT, 3, 0);
+                           //OSZIAHI;
+                           delay_ms(1);
                            
                            if (obj3erfolg==0) // EEPROM erfolgreich gelesen
-									{
-										//err_gotoxy(10,0);
-										//err_puts("         \0");
-										//err_gotoxy(10,0);
-										//err_puts("PWM:\0");
+                           {
+                              //err_gotoxy(10,0);
+                              //err_puts("         \0");
+                              //err_gotoxy(10,0);
+                              //err_puts("PWM:\0");
                               uint8_t pwmcode = tagblock3[0];
-										//err_puthex(pwmcode);
+                              //err_puthex(pwmcode);
                               pwmcode = tagblock3[1];
                               //err_puthex(pwmcode);
                               pwmcode = tagblock3[2];
@@ -3713,55 +3831,55 @@ int main (void)
                            outbuffer[18] = werkstattrxstatus;
                            
                            
-                        SchreibStatus &= ~(1<< WERKSTATT);
-								}
+                           SchreibStatus &= ~(1<< WERKSTATT);
+                        }
                         
                         
-								//lesen von Werkstatt
+                        //lesen von Werkstatt
                         
-								if (LeseStatus & (1<< WERKSTATT))	
-								{
-									delay_ms(2);
-									//err_gotoxy(5,1);
-									//err_puts("W\0");
-									
-									wdt_reset();
-									twi_Call_count0++;
-									uint8_t werkstatterfolg=SlavedatenLesen(WERKSTATT_ADRESSE,WerkstattRXdaten);
-									wdt_reset();
-									
-									err_puthex(WerkstattRXdaten[3]);
-									
-									if (werkstatterfolg)
-									{
-										//err_gotoxy(6,1);
-										//err_puts("Z\0");
-										Read_Err |= (1<<WERKSTATT);
+                        if (LeseStatus & (1<< WERKSTATT))	
+                        {
+                           delay_ms(2);
+                           //err_gotoxy(5,1);
+                           //err_puts("W\0");
+                           
+                           wdt_reset();
+                           twi_Call_count0++;
+                           uint8_t werkstatterfolg=SlavedatenLesen(WERKSTATT_ADRESSE,WerkstattRXdaten);
+                           wdt_reset();
+                           
+                           err_puthex(WerkstattRXdaten[3]);
+                           
+                           if (werkstatterfolg)
+                           {
+                              //err_gotoxy(6,1);
+                              //err_puts("Z\0");
+                              Read_Err |= (1<<WERKSTATT);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									else
-									{
-										twi_Reply_count0++;
-										if (WerkstattRXdaten[3] & (1<<TIEFKUEHLALARM))
-										{
-											outbuffer[31] |= (1<<TIEFKUEHLALARM); // Alarmbit setzen
+                           }
+                           else
+                           {
+                              twi_Reply_count0++;
+                              if (WerkstattRXdaten[3] & (1<<TIEFKUEHLALARM))
+                              {
+                                 outbuffer[31] |= (1<<TIEFKUEHLALARM); // Alarmbit setzen
                                  
-										}
-										else 
-										{
-											outbuffer[31] &= ~(1<<TIEFKUEHLALARM); // Alarmbit zuruecksetzen
-										}
-										
-										if (WerkstattRXdaten[3] & (1<<WASSERALARMKELLER))
-										{
-											outbuffer[31] |= (1<<WASSERALARMKELLER); // Alarmbit setzen
-										}
-										else 
-										{
-											outbuffer[31] &= ~(1<<WASSERALARMKELLER); // Alarmbit zuruecksetzen
-										}
-										
-										// Strom lesen
+                              }
+                              else 
+                              {
+                                 outbuffer[31] &= ~(1<<TIEFKUEHLALARM); // Alarmbit zuruecksetzen
+                              }
+                              
+                              if (WerkstattRXdaten[3] & (1<<WASSERALARMKELLER))
+                              {
+                                 outbuffer[31] |= (1<<WASSERALARMKELLER); // Alarmbit setzen
+                              }
+                              else 
+                              {
+                                 outbuffer[31] &= ~(1<<WASSERALARMKELLER); // Alarmbit zuruecksetzen
+                              }
+                              
+                              // Strom lesen
                               outbuffer[33] = WerkstattRXdaten[STROMHH];
                               outbuffer[34] = WerkstattRXdaten[STROMH];
                               outbuffer[35] = WerkstattRXdaten[STROML];
@@ -3771,22 +3889,22 @@ int main (void)
                                lcd_puthex(EstrichRXdaten[5]); // Kollektortemperatur
                                lcd_puthex(EstrichRXdaten[6]); // 
                                lcd_puthex(EstrichRXdaten[7]);// redKollektortemperatur>>1, Wert aus ADC / 2
-
+                               
                                */
-									}
-									
-									
-									
-									
-									LeseStatus &= ~(1<< WERKSTATT);
-								}
+                           }
+                           
+                           
+                           
+                           
+                           LeseStatus &= ~(1<< WERKSTATT);
+                        }
 #pragma mark Buero					
-								//	*****************
-								//	*	Buero
-								//	*****************
-								
-								if (SchreibStatus & (1<< BUERO))	//schreiben an Buero
-								{
+                        //	*****************
+                        //	*	Buero
+                        //	*****************
+                        
+                        if (SchreibStatus & (1<< BUERO))	//schreiben an Buero
+                        {
                            /*
                             Status byte 22
                             bit 0:   Lampe
@@ -3794,805 +3912,806 @@ int main (void)
                             
                             
                             */
-
+                           
                            uint8_t buerostatus=0;
-									delay_ms(2);
-									//err_gotoxy(8,1);
-									//err_puts("B\0");
-									//err_puts("  \0"); // Codes loeschen
-									PORTC |= (1<<TWICOUNTPIN);
-									uint8_t BueroTagblock[buffer_size];
-									uint8_t Stundencode=0;
-									//err_clr_line(0);
-									//err_gotoxy(12,1);
-									//err_puts("WB:\0");
-									//err_putint1(Zeit.wochentag);
-									
-									// Buero-Tagplan lesen
-									
-									//err_clr_part(0,0,10);
-									//err_puts("WT B rd\0");
-									wdt_reset();
-									uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, BueroTagblock, BUERO, 0, Zeit.wochentag);
-									wdt_reset();
-									if (erfolg==0)
-									{
-										Stundencode=Tagplanwert(BueroTagblock, Zeit.stunde);
-										wdt_reset();
-										
-										//	BueroTXdaten[0]: Bit 0: Uhr ein	Bit 1: Uhr aus
-										switch (Zeit.minute/30)
-										{
-											case 0: // erste halbe Stunde
-											{
-												BueroTXdaten[0] = (Stundencode >=2); //Werte 2, 3: ON Wert 0: OFF
-												
-											
+                           delay_ms(2);
+                           //err_gotoxy(8,1);
+                           //err_puts("B\0");
+                           //err_puts("  \0"); // Codes loeschen
+                           PORTC |= (1<<TWICOUNTPIN);
+                           uint8_t BueroTagblock[buffer_size];
+                           uint8_t Stundencode=0;
+                           //err_clr_line(0);
+                           //err_gotoxy(12,1);
+                           //err_puts("WB:\0");
+                           //err_putint1(Zeit.wochentag);
+                           
+                           // Buero-Tagplan lesen
+                           
+                           //err_clr_part(0,0,10);
+                           //err_puts("WT B rd\0");
+                           wdt_reset();
+                           uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, BueroTagblock, BUERO, 0, Zeit.wochentag);
+                           wdt_reset();
+                           if (erfolg==0)
+                           {
+                              Stundencode=Tagplanwert(BueroTagblock, Zeit.stunde);
+                              wdt_reset();
+                              
+                              //	BueroTXdaten[0]: Bit 0: Uhr ein	Bit 1: Uhr aus
+                              switch (Zeit.minute/30)
+                              {
+                                    case 0: // erste halbe Stunde
+                                 {
+                                    BueroTXdaten[0] = (Stundencode >=2); //Werte 2, 3: ON Wert 0: OFF
+                                    
+                                    
                                  }break;
-												
-											case 1: // zweite halbe Stunde
-											{
-												BueroTXdaten[0] = ((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: ON Wert 0: OFF
-											}break;
-										}//switch
-										if (BueroTXdaten[0])
+                                    
+                                    case 1: // zweite halbe Stunde
+                                 {
+                                    BueroTXdaten[0] = ((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: ON Wert 0: OFF
+                                 }break;
+                              }//switch
+                              if (BueroTXdaten[0])
                               {
                                  buerostatus |= (1<<0);
                               }
                               
-										// BueroTXdaten Test
+                              // BueroTXdaten Test
                               /*
-										if (Zeit.minute&2) // Minuten ungerade
-										{
-											BueroTXdaten[0] |= (1<<0); // Bit 0 setzen
-										}
-										else
-										{
-											BueroTXdaten[0] &= ~(1<<0); // Bit 0 reseten
-										}
-										*/
-										//
-										
-										//err_putint1(BueroTXdaten[0]);
-										//err_putc(' ');
-										
-										
-										//	Servo
-										if ((Zeit.minute % 10) >5)
-										{
-											BueroTXdaten[3]=Zeit.minute % 5;
-										}
-										else
-										{
-											BueroTXdaten[3]=5-Zeit.minute%5;
-										}
-										
-										
-										
-									}//erfolg
-									else
-									{
-										
-										//err_gotoxy(9,1);
-										//err_puts("X\0");
-										//err_clr_part(1,9,19);
-										//err_puts("wl B er\0");
-										//err_puthex(erfolg);
-										//delay_ms(800);
-										EEPROM_Err |= (1<<BUERO);
+                               if (Zeit.minute&2) // Minuten ungerade
+                               {
+                               BueroTXdaten[0] |= (1<<0); // Bit 0 setzen
+                               }
+                               else
+                               {
+                               BueroTXdaten[0] &= ~(1<<0); // Bit 0 reseten
+                               }
+                               */
+                              //
+                              
+                              //err_putint1(BueroTXdaten[0]);
+                              //err_putc(' ');
+                              
+                              
+                              //	Servo
+                              if ((Zeit.minute % 10) >5)
+                              {
+                                 BueroTXdaten[3]=Zeit.minute % 5;
+                              }
+                              else
+                              {
+                                 BueroTXdaten[3]=5-Zeit.minute%5;
+                              }
+                              
+                              
+                              
+                           }//erfolg
+                           else
+                           {
+                              
+                              //err_gotoxy(12,0);
+                              //err_putc('T');
+                              //err_clr_part(1,9,19);
+                              //err_puts("wl B er\0");
+                              //err_puthex(TWI_FLAG);
+                              //delay_ms(800);
+                              EEPROM_Err |= (1<<BUERO);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									
-									uint8_t pos=0x00;
-									pos=(PINB & 0x03)>>4; // Bit 0, 1
-									//pos >>4;
-									//pos |= (1<<LOOPCOUNTPIN);
-									//pos |= (1<<TWICOUNTPIN);
-									
-									pos=Zeit.minute%5;
-									//					err_gotoxy(12,1);
-									//					err_puthex(pos);
-									BueroTXdaten[3]=pos;
-									//delay_ms(40);
-									/*
-									 switch (pos)
-									 {
-									 case 0:
-									 BueroTXdaten[3]=20;
-									 break;
-									 
-									 case 1:
-									 BueroTXdaten[3]=30;
-									 break;
-									 
-									 case 2:
-									 BueroTXdaten[3]=40;
-									 break;
-									 
-									 case 3:
-									 BueroTXdaten[3]=50;
-									 break;
-									 
-									 default:
-									 BueroTXdaten[3]=60;
-									 }//switch pos
-									 */
-									
-									//					err_putc(' ');
-									//					err_putint2(BueroTXdaten[3]);
-									
-									uint8_t bueroerfolg=0;
-									
-									//err_clr_part(0,0,10);
-									//err_puts("Br wr\0");
-									wdt_reset();
-									twi_Call_count0++;
-									bueroerfolg=SlavedatenSchreiben(BUERO_ADRESSE, BueroTXdaten);
-									wdt_reset();
-									if (bueroerfolg)
-									{
-										
-										//err_gotoxy(10,1);
-										//err_puts("Y\0");
-										//err_clr_part(1,9,19);
-										//err_puts("w Br err\0");
-										//err_puthex(bueroerfolg);
-										//delay_ms(80);
-										Write_Err |= (1<<BUERO);
+                           }
+                           
+                           uint8_t pos=0x00;
+                           pos=(PINB & 0x03)>>4; // Bit 0, 1
+                           //pos >>4;
+                           //pos |= (1<<LOOPCOUNTPIN);
+                           //pos |= (1<<TWICOUNTPIN);
+                           
+                           pos=Zeit.minute%5;
+                           //					err_gotoxy(12,1);
+                           //					err_puthex(pos);
+                           BueroTXdaten[3]=pos;
+                           //delay_ms(40);
+                           /*
+                            switch (pos)
+                            {
+                            case 0:
+                            BueroTXdaten[3]=20;
+                            break;
+                            
+                            case 1:
+                            BueroTXdaten[3]=30;
+                            break;
+                            
+                            case 2:
+                            BueroTXdaten[3]=40;
+                            break;
+                            
+                            case 3:
+                            BueroTXdaten[3]=50;
+                            break;
+                            
+                            default:
+                            BueroTXdaten[3]=60;
+                            }//switch pos
+                            */
+                           
+                           //					err_putc(' ');
+                           //					err_putint2(BueroTXdaten[3]);
+                           
+                           uint8_t bueroerfolg=0;
+                           
+                           //err_clr_part(0,0,10);
+                           //err_puts("Br wr\0");
+                           wdt_reset();
+                           twi_Call_count0++;
+                           bueroerfolg=SlavedatenSchreiben(BUERO_ADRESSE, BueroTXdaten);
+                           wdt_reset();
+                           if (bueroerfolg)
+                           {
+                              
+                              //err_gotoxy(10,1);
+                              //err_puts("Y\0");
+                              //err_clr_part(1,9,19);
+                              //err_puts("w Br err\0");
+                              //err_puthex(bueroerfolg);
+                              //delay_ms(80);
+                              Write_Err |= (1<<BUERO);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									else
-									{
-										twi_Reply_count0++;
-									}
-									//					err_gotoxy(12,1);
-									//					err_puts("WB\0");
-									//err_gotoxy(12,0);
-									//					err_puthex(bueroerfolg);
-									
-									SchreibStatus &= ~(1<< BUERO);
-									delay_ms(100);
-									PORTC &= ~(1<<TWICOUNTPIN);
+                           }
+                           else
+                           {
+                              twi_Reply_count0++;
+                           }
+                           //					err_gotoxy(12,1);
+                           //					err_puts("WB\0");
+                           //err_gotoxy(12,0);
+                           //					err_puthex(bueroerfolg);
+                           
+                           SchreibStatus &= ~(1<< BUERO);
+                           delay_ms(100);
+                           PORTC &= ~(1<<TWICOUNTPIN);
                            outbuffer[22] = buerostatus;
-								}
+                        }
                         
                         
-								//lesen von Buero
+                        //lesen von Buero
                         
                         
-								if (LeseStatus & (1<< BUERO))
-								{
-									delay_ms(2);
-									err_gotoxy(8,2);
-									err_puts("B\0");
-									err_puts("  \0");
-									PORTC |= (1<<TWICOUNTPIN);
-									
-									//err_clr_line(1);
-									//lcd_gotoxy(12,3);
-									//err_puts("RB:\0");
-									//delay_ms(50);
-									//uint8_t BuerolesenDaten[buffer_size];
-									uint8_t Buerolesenerfolg=0;
-									
-									//err_clr_part(0,0,10);
-									//err_puts("Br rd\0");
-									wdt_reset();
-									twi_Call_count0++;
-									Buerolesenerfolg=SlavedatenLesen(BUERO_ADRESSE,BueroRXdaten);
-									wdt_reset();
-									
-									if (Buerolesenerfolg)
-									{
-										//err_gotoxy(10,1);
-										//err_puts("Z\0");
-										
-										//err_clr_part(1,9,19);
-										//err_puts("r Br err\0");
-										//err_puthex(Buerolesenerfolg);
-										//delay_ms(800);
-										Read_Err |= (1<<BUERO);
+                        if (LeseStatus & (1<< BUERO))
+                        {
+                           delay_ms(2);
+                           //err_gotoxy(8,2);
+                           //err_puts("B\0");
+                           //err_puts("  \0");
+                           PORTC |= (1<<TWICOUNTPIN);
+                           
+                           //err_clr_line(1);
+                           //lcd_gotoxy(12,3);
+                           //err_puts("RB:\0");
+                           //delay_ms(50);
+                           //uint8_t BuerolesenDaten[buffer_size];
+                           uint8_t Buerolesenerfolg=0;
+                           
+                           //err_clr_part(0,0,10);
+                           //err_puts("Br rd\0");
+                           wdt_reset();
+                           twi_Call_count0++;
+                           Buerolesenerfolg=SlavedatenLesen(BUERO_ADRESSE,BueroRXdaten);
+                           wdt_reset();
+                           
+                           if (Buerolesenerfolg)
+                           {
+                              //err_gotoxy(10,1);
+                              //err_puts("Z\0");
+                              
+                              //err_clr_part(1,9,19);
+                              //err_puts("r Br err\0");
+                              //err_puthex(Buerolesenerfolg);
+                              //delay_ms(800);
+                              Read_Err |= (1<<BUERO);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									else
-									{
-										twi_Reply_count0++;
-									}
-									
-									/*
-									 // for (i=0;i<8;i++)
-									 {
-									 i=1;
-									 err_gotoxy(13,0);
-									 err_putint1(i);
-									 err_putc(' ');
-									 err_puthex(Buerodaten[i]);
-									 delay_ms(600);
-									 
-									 }
-									 */
-									
-									//err_clr_line(0);
-									//err_puts("R B:\0");
-									//err_puthex(BueroRXdaten[0]);
-									//				err_puthex(BueroRXdaten[1]);
-									//				err_puthex(BueroRXdaten[2]);
-									//				err_puthex(BueroRXdaten[3]);
-									//delay_ms(400);
-									//err_puthex(LeseStatus);
+                           }
+                           else
+                           {
+                              twi_Reply_count0++;
+                           }
+                           
+                           /*
+                            // for (i=0;i<8;i++)
+                            {
+                            i=1;
+                            err_gotoxy(13,0);
+                            err_putint1(i);
+                            err_putc(' ');
+                            err_puthex(Buerodaten[i]);
+                            delay_ms(600);
+                            
+                            }
+                            */
+                           
+                           //err_clr_line(0);
+                           //err_puts("R B:\0");
+                           //err_puthex(BueroRXdaten[0]);
+                           //				err_puthex(BueroRXdaten[1]);
+                           //				err_puthex(BueroRXdaten[2]);
+                           //				err_puthex(BueroRXdaten[3]);
+                           //delay_ms(400);
+                           //err_puthex(LeseStatus);
                            
                            outbuffer[23] = BueroRXdaten[1]; // Temp
                            
                            
                            lcd_gotoxy(10,0);
                            lcd_puthex(BueroRXdaten[7]);
-									LeseStatus &= ~(1<< BUERO);
-									delay_ms(100);
-									PORTC &= ~(1<<TWICOUNTPIN);
-									
-								}
-								
+                           LeseStatus &= ~(1<< BUERO);
+                           delay_ms(100);
+                           PORTC &= ~(1<<TWICOUNTPIN);
+                           
+                        }
+                        
 #pragma mark Wozi					
-								//	*****************
-								//	*	WOZI
-								//	*****************
-								if (SchreibStatus & (1<< WOZI))	//schreiben an Wozi
-								{
-									delay_ms(2);
-									//	err_gotoxy(12,1);
-									//						err_puts("W\0");
-									
-									//delay_ms(2);
+                        //	*****************
+                        //	*	WOZI
+                        //	*****************
+                        if (SchreibStatus & (1<< WOZI))	//schreiben an Wozi
+                        {
+                           delay_ms(2);
+                           //	err_gotoxy(12,1);
+                           //						err_puts("W\0");
+                           
+                           //delay_ms(2);
                            uint8_t wozistatus=0;
-									uint8_t WoziTagblock[buffer_size];
-									uint8_t Stundencode=0;
-									WoZiTXdaten[0]=0;
-									
-									// WoZi-Tagplan lesen
-									wdt_reset();
-									
-									// Lampe lesen
-									uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, WoziTagblock, WOZI, 0, Zeit.wochentag);
-									wdt_reset();
-									if (erfolg==0)
-									{
-										Stundencode=Tagplanwert(WoziTagblock, Zeit.stunde);
-										//outbuffer[29] |= Stundencode; // 9.4.11
-										
-										switch (Zeit.minute/30)
-										{
-											case 0: // erste halbe Stunde
-											{
-												
-												WoZiTXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
-												
-											}break;
-												
-											case 1: // zweite halbe Stunde
-											{
-												WoZiTXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
-											}break;
-										}//switch
-										if (WoZiTXdaten[0])
+                           uint8_t WoziTagblock[buffer_size];
+                           uint8_t Stundencode=0;
+                           WoZiTXdaten[0]=0;
+                           
+                           // WoZi-Tagplan lesen
+                           wdt_reset();
+                           
+                           // Lampe lesen
+                           uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, WoziTagblock, WOZI, 0, Zeit.wochentag);
+                           wdt_reset();
+                           if (erfolg==0)
+                           {
+                              Stundencode=Tagplanwert(WoziTagblock, Zeit.stunde);
+                              //outbuffer[29] |= Stundencode; // 9.4.11
+                              
+                              switch (Zeit.minute/30)
+                              {
+                                    case 0: // erste halbe Stunde
+                                 {
+                                    
+                                    WoZiTXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
+                                    
+                                 }break;
+                                    
+                                    case 1: // zweite halbe Stunde
+                                 {
+                                    WoZiTXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
+                                 }break;
+                              }//switch
+                              if (WoZiTXdaten[0])
                               {
                                  wozistatus |= (1<<0);
                               }
-										//outbuffer[29] |=WoZiTXdaten[0];
-										// Test
-										//				WoZiTXdaten[0]=Zeit.minute%2;
-										//
-										
-										//							err_gotoxy(13,1);
-										//							err_putint1(LaborTXdaten[0]);
-										
-										
-									}//erfolg
-									else
-									{
-										EEPROM_Err |= (1<<WOZI);
+                              //outbuffer[29] |=WoZiTXdaten[0];
+                              // Test
+                              //				WoZiTXdaten[0]=Zeit.minute%2;
+                              //
+                              
+                              //							err_gotoxy(13,1);
+                              //							err_putint1(LaborTXdaten[0]);
+                              
+                              
+                           }//erfolg
+                           else
+                           {
+                              EEPROM_Err |= (1<<WOZI);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									
-									wdt_reset();
-									twi_Call_count0++;
-									
-									//begin Schreiben Objekt 1
-									// Code fuer Objekt 1 lesen: Radiator
-									WoZiTXdaten[1] = 0;
-									uint8_t tagblock1[buffer_size];
-									uint8_t obj1erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock1, WOZI, 1, Zeit.wochentag);
-									if (obj1erfolg==0) // EEPROM erfolgreich gelesen
-									{
-										int RadiatorStundencode=Tagplanwert(tagblock1, Zeit.stunde);
-										
+                           }
+                           
+                           wdt_reset();
+                           twi_Call_count0++;
+                           
+                           //begin Schreiben Objekt 1
+                           // Code fuer Objekt 1 lesen: Radiator
+                           WoZiTXdaten[1] = 0;
+                           uint8_t tagblock1[buffer_size];
+                           uint8_t obj1erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock1, WOZI, 1, Zeit.wochentag);
+                           if (obj1erfolg==0) // EEPROM erfolgreich gelesen
+                           {
+                              int RadiatorStundencode=Tagplanwert(tagblock1, Zeit.stunde);
+                              
                               RadiatorStundencode &= 0x03;	// Bit 0 und 1 filtern fuer WoZiTXdaten[1]
-										WoZiTXdaten[1] = RadiatorStundencode;
-										
-									}
-									else
-									{
-										EEPROM_Err |= (1<<WOZI);
+                              WoZiTXdaten[1] = RadiatorStundencode;
+                              
+                           }
+                           else
+                           {
+                              EEPROM_Err |= (1<<WOZI);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
+                           }
                            if (WoZiTXdaten[1])
                            {
                               wozistatus |= (1<<1);
                            }
-
-									//end Schreiben Objekt 1
-									
-									uint8_t wozierfolg=0;
                            
-									wozierfolg=SlavedatenSchreiben(WOZI_ADRESSE,  WoZiTXdaten);
-									
-									wdt_reset();
-									//WoZiTXdaten[4]=45;
-									if (wozierfolg)
-									{
-										Write_Err |= (1<<WOZI);
+                           //end Schreiben Objekt 1
+                           
+                           uint8_t wozierfolg=0;
+                           
+                           wozierfolg=SlavedatenSchreiben(WOZI_ADRESSE,  WoZiTXdaten);
+                           
+                           wdt_reset();
+                           //WoZiTXdaten[4]=45;
+                           if (wozierfolg)
+                           {
+                              Write_Err |= (1<<WOZI);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									else
-									{
-										twi_Reply_count0++;
-									}
-									/*
+                           }
+                           else
+                           {
+                              twi_Reply_count0++;
+                           }
+                           /*
                             
-									 */
-									SchreibStatus &= ~(1<< WOZI);
+                            */
+                           SchreibStatus &= ~(1<< WOZI);
                            outbuffer[20] = wozistatus;
-								}
+                        }
                         
                         // Lesen von Wozi
-								
-								if (LeseStatus & (1<< WOZI))	//lesen von Wozi
-								{
-									delay_ms(2);
-									wdt_reset();
-									twi_Call_count0++;
-									uint8_t wozierfolg=SlavedatenLesen(WOZI_ADRESSE, (void*)WoZiRXdaten);
-									wdt_reset();
-									if (wozierfolg)
-									{
-										Read_Err |= (1<<WOZI);
+                        
+                        if (LeseStatus & (1<< WOZI))	//lesen von Wozi
+                        {
+                           delay_ms(2);
+                           wdt_reset();
+                           twi_Call_count0++;
+                           uint8_t wozierfolg=SlavedatenLesen(WOZI_ADRESSE, (void*)WoZiRXdaten);
+                           wdt_reset();
+                           if (wozierfolg)
+                           {
+                              Read_Err |= (1<<WOZI);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									else
-									{
-										twi_Reply_count0++;
-										uint8_t pos=0x00;
-										pos=(PINC & 0x30)>>4; // Bit 4, 5
-										switch (pos)
-										{
-											case 0:
-												WoZiTXdaten[4]=0;
-												break;
-												
-											case 1:
-												WoZiTXdaten[4]=35;
-												break;
-												
-											case 2:
-												WoZiTXdaten[4]=50;
-												break;
-												
-											case 3:
-												WoZiTXdaten[4]=65;
-												break;
-												
-										}//switch pos
-										//		WebTxDaten[7]= WoZiRXdaten[1];	// Innentemperatur
-										outbuffer[21]= WoZiRXdaten[1];
+                           }
+                           else
+                           {
+                              twi_Reply_count0++;
+                              uint8_t pos=0x00;
+                              pos=(PINC & 0x30)>>4; // Bit 4, 5
+                              switch (pos)
+                              {
+                                    case 0:
+                                    WoZiTXdaten[4]=0;
+                                    break;
+                                    
+                                    case 1:
+                                    WoZiTXdaten[4]=35;
+                                    break;
+                                    
+                                    case 2:
+                                    WoZiTXdaten[4]=50;
+                                    break;
+                                    
+                                    case 3:
+                                    WoZiTXdaten[4]=65;
+                                    break;
+                                    
+                              }//switch pos
+                              //		WebTxDaten[7]= WoZiRXdaten[1];	// Innentemperatur
+                              outbuffer[21]= WoZiRXdaten[1];
                               outbuffer[7]= WoZiRXdaten[1];// Innentemperatur
-									}
-									
-									LeseStatus &= ~(1<< WOZI);
-								}
-								
-#pragma mark Labor					
-								//	*****************
-								//	*	Labor
-								//	*****************
-								if (SchreibStatus & (1<< LABOR))	//schreiben an Labor
-								{
-									//						err_gotoxy(12,1);
-									//						err_puts("L\0");
-									delay_ms(2);
-									//delay_ms(2);
-                           uint8_t laborstatus=0;
-									uint8_t LaborTagblock[buffer_size];
-									uint8_t Stundencode=0;
-									LaborTXdaten[0]=0;
-									
-									// Labor-Tagplan lesen
-									//err_clr_part(0,0,10);
-									//err_puts("WT L rd\0");
-									wdt_reset();
+                           }
                            
-									uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, LaborTagblock, LABOR, 0, Zeit.wochentag);
-									wdt_reset();
-									if (erfolg==0)
-									{
-										Stundencode=Tagplanwert(LaborTagblock, Zeit.stunde);
+                           LeseStatus &= ~(1<< WOZI);
+                        }
+                        
+#pragma mark Labor					
+                        //	*****************
+                        //	*	Labor
+                        //	*****************
+                        if (SchreibStatus & (1<< LABOR))	//schreiben an Labor
+                        {
+                           //						err_gotoxy(12,1);
+                           //						err_puts("L\0");
+                           delay_ms(2);
+                           //delay_ms(2);
+                           uint8_t laborstatus=0;
+                           uint8_t LaborTagblock[buffer_size];
+                           uint8_t Stundencode=0;
+                           LaborTXdaten[0]=0;
+                           
+                           // Labor-Tagplan lesen
+                           //err_clr_part(0,0,10);
+                           //err_puts("WT L rd\0");
+                           wdt_reset();
+                           
+                           uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, LaborTagblock, LABOR, 0, Zeit.wochentag);
+                           wdt_reset();
+                           if (erfolg==0)
+                           {
+                              Stundencode=Tagplanwert(LaborTagblock, Zeit.stunde);
                               
                               
-										switch (Zeit.minute/30)
-										{
-											case 0: // erste halbe Stunde
-											{
-												
-												LaborTXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
-												
-											}break;
-												
-											case 1: // zweite halbe Stunde
-											{
-												LaborTXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
-											}break;
-										}//switch
-										
-										// Test
-										//				LaborTXdaten[0]=Zeit.minute%2;
-										//
-										
-										//							err_gotoxy(13,1);
-										//							err_putint1(LaborTXdaten[0]);
-										
-										
-									}//erfolg
-									else
-									{
-										EEPROM_Err |= (1<<LABOR);
+                              switch (Zeit.minute/30)
+                              {
+                                    case 0: // erste halbe Stunde
+                                 {
+                                    
+                                    LaborTXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
+                                    
+                                 }break;
+                                    
+                                    case 1: // zweite halbe Stunde
+                                 {
+                                    LaborTXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
+                                 }break;
+                              }//switch
+                              
+                              // Test
+                              //				LaborTXdaten[0]=Zeit.minute%2;
+                              //
+                              
+                              //							err_gotoxy(13,1);
+                              //							err_putint1(LaborTXdaten[0]);
+                              
+                              
+                           }//erfolg
+                           else
+                           {
+                              EEPROM_Err |= (1<<LABOR);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
+                           }
                            
                            if (LaborTXdaten[0])
                            {
                               laborstatus |= (1<<0);
                            }
-
-									// Radiator lesen
+                           
+                           // Radiator lesen
                            LaborTXdaten[1]=0;
-									wdt_reset();
-									erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, LaborTagblock, LABOR, 1, Zeit.wochentag);
-									wdt_reset();
-									if (erfolg==0)
-									{
-										int RadiatorStundencode=Tagplanwert(LaborTagblock, Zeit.stunde);
+                           wdt_reset();
+                           erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, LaborTagblock, LABOR, 1, Zeit.wochentag);
+                           wdt_reset();
+                           if (erfolg==0)
+                           {
+                              int RadiatorStundencode=Tagplanwert(LaborTagblock, Zeit.stunde);
                               RadiatorStundencode &= 0x03;	// Bit 0 und 1 filtern fuer TXdaten[1]
                               LaborTXdaten[1] = RadiatorStundencode;
-										
-									}//erfolg
-									else
-									{
-										EEPROM_Err |= (1<<LABOR);
+                              
+                           }//erfolg
+                           else
+                           {
+                              EEPROM_Err |= (1<<LABOR);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
+                           }
                            if (LaborTXdaten[1])
                            {
                               laborstatus |= (1<<1);
                            }
-								
-									// end Radiator lesen
-									
-									uint8_t laborerfolg=0;
-									
-									//err_clr_part(0,0,10);
-									//err_puts("LB wr\0");
-									wdt_reset();
-									twi_Call_count0++;
-									laborerfolg=SlavedatenSchreiben(LABOR_ADRESSE,  (void*)LaborTXdaten);
-									wdt_reset();
-									LaborTXdaten[4]=45;
-									if (laborerfolg)
-									{
-										//err_gotoxy(13,1);
-										//err_puts("Y\0");
-										//err_clr_part(1,9,19);
-										//err_puts("w Lb err\0");
-										//err_puthex(laborerfolg);
-										//delay_ms(800);
-										Write_Err |= (1<<LABOR);
+                           
+                           // end Radiator lesen
+                           
+                           uint8_t laborerfolg=0;
+                           
+                           //err_clr_part(0,0,10);
+                           //err_puts("LB wr\0");
+                           wdt_reset();
+                           twi_Call_count0++;
+                           laborerfolg=SlavedatenSchreiben(LABOR_ADRESSE,  (void*)LaborTXdaten);
+                           wdt_reset();
+                           LaborTXdaten[4]=45;
+                           if (laborerfolg)
+                           {
+                              //err_gotoxy(13,1);
+                              //err_puts("Y\0");
+                              //err_clr_part(1,9,19);
+                              //err_puts("w Lb err\0");
+                              //err_puthex(laborerfolg);
+                              //delay_ms(800);
+                              Write_Err |= (1<<LABOR);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									else
-									{
-										twi_Reply_count0++;
-									}
-									
-									SchreibStatus &= ~(1<< LABOR);
-								}
-								
-								if (LeseStatus & (1<< LABOR))	//lesen von Labor
-								{
-									delay_ms(2);
-									//						err_gotoxy(12,1);
-									//						err_puts("L\0");
-									//uint8_t laborerfolg=SlaveLesen(LABOR_ADRESSE);
-									//err_clr_part(0,0,10);
-									//err_puts("LB rd\0");
-									wdt_reset();
-									twi_Call_count0++;
-									uint8_t laborerfolg=SlavedatenLesen(LABOR_ADRESSE, LaborRXdaten);
-									wdt_reset();
-									if (laborerfolg)
-									{
-										//err_gotoxy(14,1);
-										//err_puts("Z\0");
-										//err_clr_part(1,9,19);
-										//err_puts("r Lb err\0");
-										//err_puthex(laborerfolg);
-										//delay_ms(800);
-										Read_Err |= (1<<LABOR);
+                           }
+                           else
+                           {
+                              twi_Reply_count0++;
+                           }
+                           
+                           SchreibStatus &= ~(1<< LABOR);
+                        }
+                        
+                        if (LeseStatus & (1<< LABOR))	//lesen von Labor
+                        {
+                           delay_ms(2);
+                           //						err_gotoxy(12,1);
+                           //						err_puts("L\0");
+                           //uint8_t laborerfolg=SlaveLesen(LABOR_ADRESSE);
+                           //err_clr_part(0,0,10);
+                           //err_puts("LB rd\0");
+                           wdt_reset();
+                           twi_Call_count0++;
+                           uint8_t laborerfolg=SlavedatenLesen(LABOR_ADRESSE, LaborRXdaten);
+                           wdt_reset();
+                           if (laborerfolg)
+                           {
+                              //err_gotoxy(14,1);
+                              //err_puts("Z\0");
+                              //err_clr_part(1,9,19);
+                              //err_puts("r Lb err\0");
+                              //err_puthex(laborerfolg);
+                              //delay_ms(800);
+                              Read_Err |= (1<<LABOR);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									else
-									{
-										twi_Reply_count0++;
-										/*
-										 for (i=0;i<8;i++)
-										 {
-										 LaborRXdaten[i]=rxbuffer[i];
-										 rxbuffer[i]=0;
-										 }
-										 */
-										LaborTXdaten[4]=45;
-										uint8_t pos=0x00;
-										pos=(PINC & 0x30)>>4; // Bit 4, 5
-										//pos >>4;
-										//err_gotoxy(7,1);
-										//err_puthex(pos);
-										//delay_ms(40);
-										switch (pos)
-										{
-											case 0:
-												LaborTXdaten[4]=0;
-												break;
-												
-											case 1:
-												LaborTXdaten[4]=35;
-												break;
-												
-											case 2:
-												LaborTXdaten[4]=50;
-												break;
-												
-											case 3:
-												LaborTXdaten[4]=65;
-												break;
-												
-										}//switch pos
-									}
-									
-									LeseStatus &= ~(1<< LABOR);
-								} //	Labor
-								
+                           }
+                           else
+                           {
+                              twi_Reply_count0++;
+                              /*
+                               for (i=0;i<8;i++)
+                               {
+                               LaborRXdaten[i]=rxbuffer[i];
+                               rxbuffer[i]=0;
+                               }
+                               */
+                              LaborTXdaten[4]=45;
+                              uint8_t pos=0x00;
+                              pos=(PINC & 0x30)>>4; // Bit 4, 5
+                              //pos >>4;
+                              //err_gotoxy(7,1);
+                              //err_puthex(pos);
+                              //delay_ms(40);
+                              switch (pos)
+                              {
+                                    case 0:
+                                    LaborTXdaten[4]=0;
+                                    break;
+                                    
+                                    case 1:
+                                    LaborTXdaten[4]=35;
+                                    break;
+                                    
+                                    case 2:
+                                    LaborTXdaten[4]=50;
+                                    break;
+                                    
+                                    case 3:
+                                    LaborTXdaten[4]=65;
+                                    break;
+                                    
+                              }//switch pos
+                           }
+                           
+                           LeseStatus &= ~(1<< LABOR);
+                        } //	Labor
+                        
 #pragma mark OG1					
-								//	*****************
-								//	*	OG1
-								//	*****************
-								if (SchreibStatus & (1<< OG1))	//schreiben an OG1
-								{
-									delay_ms(2);
-									//	err_gotoxy(12,1);
-									//						err_puts("O\0");
-									
-									//delay_ms(2);
-									uint8_t OG1Tagblock[buffer_size];
-									uint8_t Stundencode=0;
-									OG1TXdaten[0]=0;
-									//err_clr_line(1);
-									//err_gotoxy(0,1);
-									//err_puts("WD:\0");
-									//err_putint1(Zeit.wochentag);
-									
-									// WoZi-Tagplan lesen
-									//err_clr_part(0,0,10);
-									//err_puts("WT L rd\0");
-									wdt_reset();
-									uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, OG1Tagblock, OG1, 0, Zeit.wochentag);
-									wdt_reset();
-									if (erfolg==0)
-									{
-										Stundencode=Tagplanwert(OG1Tagblock, Zeit.stunde);
-										switch (Zeit.minute/30)
-										{
-											case 0: // erste halbe Stunde
-											{
-												
-												OG1TXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
-												
-											}break;
-												
-											case 1: // zweite halbe Stunde
-											{
-												OG1TXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
-											}break;
-										}//switch
-										
-										// Test
-										//				OG1TXdaten[0]=Zeit.minute%2;
-										//
-										
-										//							err_gotoxy(13,1);
-										//							err_putint1(OG1TXdaten[0]);
-										
-										
-									}//erfolg
-									else
-									{
-										//err_clr_part(1,9,19);
-										//err_gotoxy(13,1);
-										//err_puts("X\0");
-										//err_puts("wl L er\0");
-										//err_puthex(erfolg);
-										//delay_ms(800);
-										EEPROM_Err |= (1<<OG1);
-										spistatus |= (1<<TWI_ERR_BIT);
-									}
-									
-									uint8_t og1erfolg=0;
-									
-									//err_clr_part(0,0,10);
-									//err_puts("LB wr\0");
-									wdt_reset();
-									twi_Call_count0++;
-									
-									og1erfolg=SlavedatenSchreiben(OG1_ADRESSE,  OG1TXdaten);
-									
-									wdt_reset();
-									//OG1TXdaten[4]=45;
-									if (og1erfolg)
-									{
-										//err_gotoxy(13,1);
-										//err_puts("Y\0");
-										//err_clr_part(1,9,19);
-										//err_puts("w Lb err\0");
-										//err_puthex(laborerfolg);
-										//delay_ms(800);
-										Write_Err |= (1<<OG1);
+                        //	*****************
+                        //	*	OG1
+                        //	*****************
+                        if (SchreibStatus & (1<< OG1))	//schreiben an OG1
+                        {
+                           delay_ms(2);
+                           //	err_gotoxy(12,1);
+                           //						err_puts("O\0");
+                           
+                           //delay_ms(2);
+                           uint8_t OG1Tagblock[buffer_size];
+                           uint8_t Stundencode=0;
+                           OG1TXdaten[0]=0;
+                           //err_clr_line(1);
+                           //err_gotoxy(0,1);
+                           //err_puts("WD:\0");
+                           //err_putint1(Zeit.wochentag);
+                           
+                           // WoZi-Tagplan lesen
+                           //err_clr_part(0,0,10);
+                           //err_puts("WT L rd\0");
+                           wdt_reset();
+                           uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, OG1Tagblock, OG1, 0, Zeit.wochentag);
+                           wdt_reset();
+                           if (erfolg==0)
+                           {
+                              Stundencode=Tagplanwert(OG1Tagblock, Zeit.stunde);
+                              switch (Zeit.minute/30)
+                              {
+                                    case 0: // erste halbe Stunde
+                                 {
+                                    
+                                    OG1TXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
+                                    
+                                 }break;
+                                    
+                                    case 1: // zweite halbe Stunde
+                                 {
+                                    OG1TXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
+                                 }break;
+                              }//switch
+                              
+                              // Test
+                              //				OG1TXdaten[0]=Zeit.minute%2;
+                              //
+                              
+                              //							err_gotoxy(13,1);
+                              //							err_putint1(OG1TXdaten[0]);
+                              
+                              
+                           }//erfolg
+                           else
+                           {
+                              //err_clr_part(1,9,19);
+                              //err_gotoxy(13,1);
+                              //err_puts("X\0");
+                              //err_puts("wl L er\0");
+                              //err_puthex(erfolg);
+                              //delay_ms(800);
+                              EEPROM_Err |= (1<<OG1);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									else
-									{
-										twi_Reply_count0++;
-									}
-									/*
-									 */
-									SchreibStatus &= ~(1<< OG1);
-								}
-								
-								if (LeseStatus & (1<< OG1))	//lesen von OG1
-								{
-									delay_ms(2);
-									//						err_gotoxy(12,1);
-									//						err_puts("L\0");
-									//uint8_t laborerfolg=SlaveLesen(LABOR_ADRESSE);
-									//err_clr_part(0,0,10);
-									//err_puts("LB rd\0");
-									wdt_reset();
-									twi_Call_count0++;
-									uint8_t og1erfolg=SlavedatenLesen(OG1_ADRESSE, OG1RXdaten);
-									wdt_reset();
-									if (og1erfolg)
-									{
-										//err_gotoxy(14,1);
-										//err_puts("Z\0");
-										//err_clr_part(1,9,19);
-										//err_puts("r Lb err\0");
-										//err_puthex(laborerfolg);
-										//delay_ms(800);
-										Read_Err |= (1<<OG1);
+                           }
+                           
+                           uint8_t og1erfolg=0;
+                           
+                           //err_clr_part(0,0,10);
+                           //err_puts("LB wr\0");
+                           wdt_reset();
+                           twi_Call_count0++;
+                           
+                           og1erfolg=SlavedatenSchreiben(OG1_ADRESSE,  OG1TXdaten);
+                           
+                           wdt_reset();
+                           //OG1TXdaten[4]=45;
+                           if (og1erfolg)
+                           {
+                              //err_gotoxy(13,1);
+                              //err_puts("Y\0");
+                              //err_clr_part(1,9,19);
+                              //err_puts("w Lb err\0");
+                              //err_puthex(laborerfolg);
+                              //delay_ms(800);
+                              Write_Err |= (1<<OG1);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									else
-									{
-										twi_Reply_count0++;
-										uint8_t pos=0x00;
-										pos=(PINC & 0x30)>>4; // Bit 4, 5
-										//pos >>4;
-										//pos |= (1<<LOOPCOUNTPIN);
-										//err_gotoxy(7,1);
-										//err_puthex(pos);
-										//delay_ms(40);
-										
-										//err_gotoxy(0,1);
-										//err_putc('T');
-										//err_puthex(OG1RXdaten[0]);
-										//err_puthex(OG1RXdaten[1]);
-										//err_puthex(WoZiRXdaten[2]);
-										//err_puthex(WoZiRXdaten[3]);
-										//err_puthex(WoZiRXdaten[4]);
-										//err_puthex(WoZiRXdaten[5]);
-										//err_puthex(WoZiRXdaten[6]);
-										//err_puthex(WoZiRXdaten[7]);
-										//WebTxDaten[7]= WoZiRXdaten[1];	// Innentemperatur
-										
-									}
-									
-									LeseStatus &= ~(1<< OG1);
-								}
-								
+                           }
+                           else
+                           {
+                              twi_Reply_count0++;
+                           }
+                           /*
+                            */
+                           SchreibStatus &= ~(1<< OG1);
+                        }
+                        
+                        if (LeseStatus & (1<< OG1))	//lesen von OG1
+                        {
+                           delay_ms(2);
+                           //						err_gotoxy(12,1);
+                           //						err_puts("L\0");
+                           //uint8_t laborerfolg=SlaveLesen(LABOR_ADRESSE);
+                           //err_clr_part(0,0,10);
+                           //err_puts("LB rd\0");
+                           wdt_reset();
+                           twi_Call_count0++;
+                           uint8_t og1erfolg=SlavedatenLesen(OG1_ADRESSE, OG1RXdaten);
+                           wdt_reset();
+                           if (og1erfolg)
+                           {
+                              //err_gotoxy(14,1);
+                              //err_puts("Z\0");
+                              //err_clr_part(1,9,19);
+                              //err_puts("r Lb err\0");
+                              //err_puthex(laborerfolg);
+                              //delay_ms(800);
+                              Read_Err |= (1<<OG1);
+                              spistatus |= (1<<TWI_ERR_BIT);
+                           }
+                           else
+                           {
+                              twi_Reply_count0++;
+                              uint8_t pos=0x00;
+                              pos=(PINC & 0x30)>>4; // Bit 4, 5
+                              //pos >>4;
+                              //pos |= (1<<LOOPCOUNTPIN);
+                              //err_gotoxy(7,1);
+                              //err_puthex(pos);
+                              //delay_ms(40);
+                              
+                              //err_gotoxy(0,1);
+                              //err_putc('T');
+                              //err_puthex(OG1RXdaten[0]);
+                              //err_puthex(OG1RXdaten[1]);
+                              //err_puthex(WoZiRXdaten[2]);
+                              //err_puthex(WoZiRXdaten[3]);
+                              //err_puthex(WoZiRXdaten[4]);
+                              //err_puthex(WoZiRXdaten[5]);
+                              //err_puthex(WoZiRXdaten[6]);
+                              //err_puthex(WoZiRXdaten[7]);
+                              //WebTxDaten[7]= WoZiRXdaten[1];	// Innentemperatur
+                              
+                           }
+                           
+                           LeseStatus &= ~(1<< OG1);
+                        }
+                        
 #pragma mark OG2					
-								//	*****************
-								//	*	OG2
-								//	*****************
-								if (SchreibStatus & (1<< OG2))	//schreiben an OG2
-								{
-									delay_ms(2);
-									uint8_t OG2Tagblock[buffer_size];
-									uint8_t Stundencode=0;
-									OG2TXdaten[0]=0;
-									wdt_reset();
-									uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, OG2Tagblock, OG2, 0, Zeit.wochentag);
-									wdt_reset();
-									if (erfolg==0)
-									{
-										Stundencode=Tagplanwert(OG2Tagblock, Zeit.stunde);
-										switch (Zeit.minute/30)
-										{
-											case 0: // erste halbe Stunde
-											{
-												
-												OG2TXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
-												
-											}break;
-												
-											case 1: // zweite halbe Stunde
-											{
-												OG2TXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
-											}break;
-										}//switch
-										
-										// Test
-										//				OG2TXdaten[0]=Zeit.minute%2;
-										//
-										
-										//							err_gotoxy(13,1);
-										//							err_putint1(OG2TXdaten[0]);
-										
-										
-									}//erfolg
-									else
-									{
-										EEPROM_Err |= (1<<OG2);
+                        //	*****************
+                        //	*	OG2
+                        //	*****************
+                        if (SchreibStatus & (1<< OG2))	//schreiben an OG2
+                        {
+                           TWI_FLAG = 0;
+                           delay_ms(2);
+                           uint8_t OG2Tagblock[buffer_size];
+                           uint8_t Stundencode=0;
+                           OG2TXdaten[0]=0;
+                           wdt_reset();
+                           uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, OG2Tagblock, OG2, 0, Zeit.wochentag);
+                           wdt_reset();
+                           if (erfolg==0)
+                           {
+                              Stundencode=Tagplanwert(OG2Tagblock, Zeit.stunde);
+                              switch (Zeit.minute/30)
+                              {
+                                    case 0: // erste halbe Stunde
+                                 {
+                                    
+                                    OG2TXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
+                                    
+                                 }break;
+                                    
+                                    case 1: // zweite halbe Stunde
+                                 {
+                                    OG2TXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
+                                 }break;
+                              }//switch
+                              
+                              // Test
+                              //				OG2TXdaten[0]=Zeit.minute%2;
+                              //
+                              
+                              //							err_gotoxy(13,1);
+                              //							err_putint1(OG2TXdaten[0]);
+                              
+                              
+                           }//erfolg
+                           else
+                           {
+                              EEPROM_Err |= (1<<OG2);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									
-									uint8_t og2erfolg=0;
-									wdt_reset();
-									//					twi_Call_count0++;
-									
-									og2erfolg=SlavedatenSchreiben(OG2_ADRESSE,  OG2TXdaten);
-									
-									wdt_reset();
-									if (og2erfolg)
-									{
-										Write_Err |= (1<<OG2);
+                           }
+                           
+                           uint8_t og2erfolg=0;
+                           wdt_reset();
+                           //					twi_Call_count0++;
+                           
+                           og2erfolg=SlavedatenSchreiben(OG2_ADRESSE,  OG2TXdaten);
+                           
+                           wdt_reset();
+                           if (og2erfolg)
+                           {
+                              Write_Err |= (1<<OG2);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									else
-									{
-										//						twi_Reply_count0++;
-									}
-									/*
-									 */
+                           }
+                           else
+                           {
+                              //						twi_Reply_count0++;
+                           }
+                           /*
+                            */
                            /*
                             PWM lesen
                             */
- 									uint8_t tagblock3[buffer_size];
-									uint8_t obj3erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock3, HEIZUNG, 3, 0);
-									//OSZIAHI;
-									delay_ms(1);
+                           uint8_t tagblock3[buffer_size];
+                           uint8_t obj3erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock3, HEIZUNG, 3, 0);
+                           //OSZIAHI;
+                           delay_ms(1);
                            
                            if (obj3erfolg==0) // EEPROM erfolgreich gelesen
-									{
-										//err_gotoxy(0,1);
-										//err_puts("         \0");
-										//err_gotoxy(0,1);
-										//err_puts("PWM:\0");
+                           {
+                              //err_gotoxy(0,1);
+                              //err_puts("         \0");
+                              //err_gotoxy(0,1);
+                              //err_puts("PWM:\0");
                               uint8_t pwmcode = tagblock3[0];
-										//err_puthex(pwmcode);
+                              //err_puthex(pwmcode);
                               pwmcode = tagblock3[1];
                               //err_puthex(pwmcode);
                               pwmcode = tagblock3[2];
@@ -4603,232 +4722,292 @@ int main (void)
                            {
                               
                            }
-
                            
+                           SchreibStatus &= ~(1<< OG2);
+                           if (TWI_FLAG >0)
+                           {
+                              err_gotoxy(16,2);
+                              err_puthex(OG2 | (1<<7));
+                              err_puthex(TWI_FLAG);
+                           }
                            
-									SchreibStatus &= ~(1<< OG2);
-								}	
-								
-								if (LeseStatus & (1<< OG2))	//lesen von OG2
-								{
-									delay_ms(2);
-									LeseStatus &= ~(1<< OG2);
-								}
-								
+                        }	
+                        
+                        if (LeseStatus & (1<< OG2))	//lesen von OG2
+                        {
+                           TWI_FLAG = 0;
+                           delay_ms(2);
+                           wdt_reset();
+                           twi_Call_count0++;
+                           uint8_t og2erfolg=SlavedatenLesen(OG2_ADRESSE, OG2RXdaten);
+                           wdt_reset();
+                           if (og2erfolg)
+                           {
+                              //err_gotoxy(14,1);
+                              //err_puts("Z\0");
+                              //err_clr_part(1,9,19);
+                              //err_puts("r Lb err\0");
+                              //err_puthex(laborerfolg);
+                              //delay_ms(800);
+                              Read_Err |= (1<<OG2);
+                              spistatus |= (1<<TWI_ERR_BIT);
+                           }
+                           else
+                           {
+                              twi_Reply_count0++;
+                              uint8_t pos=0x00;
+                              pos=(PINC & 0x30)>>4; // Bit 4, 5
+                              //pos >>4;
+                              //pos |= (1<<LOOPCOUNTPIN);
+                              //err_gotoxy(7,1);
+                              //err_puthex(pos);
+                              //delay_ms(40);
+                              
+                              err_gotoxy(0,2);
+                              err_putc('T');
+                              //err_puthex(OG2RXdaten[1]);
+                              err_putint(OG2RXdaten[1]/2); // Innentemperatur
+                              //err_puthex(OG2RXdaten[2]);
+                              //err_puthex(OG2RXdaten[3]);
+                              //err_puthex(OG2RXdaten[4]);
+                              //err_puthex(OG2RXdaten[5]);
+                              //err_puthex(OG2RXdaten[6]);
+                              //err_puthex(OG2RXdaten[7]);
+                              //WebTxDaten[7]= OG2RXdaten[1];   // Innentemperatur
+                              outbuffer[8] = OG2RXdaten[1];
+                              //err_putint(outbuffer[8]);
+                           }
+                           LeseStatus &= ~(1<< OG2);// Innentemperatur
+                           
+                           if (TWI_FLAG >0)
+                           {
+                              err_gotoxy(16,2);
+                              err_puthex(OG2 | (1<<6));
+                              err_puthex(TWI_FLAG);
+                           }
+                           
+                        }
+                        
 #pragma mark Estrich					
-								//	*****************
-								//	*	Estrich
-								//	*****************
-								if (SchreibStatus & (1<< ESTRICH))	//schreiben an Estrich
-								{
-									delay_ms(2);
-									uint8_t EstrichTagblock[buffer_size];
-									uint8_t Stundencode=0;
-									EstrichTXdaten[0]=0;
-									wdt_reset();
-									uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, EstrichTagblock, ESTRICH, 0, Zeit.wochentag);
-									wdt_reset();
-									if (erfolg==0)
-									{
-										Stundencode=Tagplanwert(EstrichTagblock, Zeit.stunde);
-										switch (Zeit.minute/30)
-										{
-											case 0: // erste halbe Stunde
-											{
-												
-												EstrichTXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
-												
-											}break;
-												
-											case 1: // zweite halbe Stunde
-											{
-												EstrichTXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
-											}break;
-										}//switch
-										
-										
-										
-									}//erfolg
-									else
-									{
-										EEPROM_Err |= (1<<ESTRICH);
+                        //	*****************
+                        //	*	Estrich
+                        //	*****************
+                        if (SchreibStatus & (1<< ESTRICH))	//schreiben an Estrich
+                        {
+                           delay_ms(2);
+                           uint8_t EstrichTagblock[buffer_size];
+                           uint8_t Stundencode=0;
+                           EstrichTXdaten[0]=0;
+                           wdt_reset();
+                           uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, EstrichTagblock, ESTRICH, 0, Zeit.wochentag);
+                           wdt_reset();
+                           if (erfolg==0)
+                           {
+                              Stundencode=Tagplanwert(EstrichTagblock, Zeit.stunde);
+                              switch (Zeit.minute/30)
+                              {
+                                    case 0: // erste halbe Stunde
+                                 {
+                                    
+                                    EstrichTXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
+                                    
+                                 }break;
+                                    
+                                    case 1: // zweite halbe Stunde
+                                 {
+                                    EstrichTXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
+                                 }break;
+                              }//switch
+                              
+                              
+                              
+                           }//erfolg
+                           else
+                           {
+                              EEPROM_Err |= (1<<ESTRICH);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									
-									uint8_t estricherfolg=0;
-									
-									//err_clr_part(0,0,10);
-									//err_puts("E wr\0");
-									wdt_reset();
-									//					twi_Call_count0++;
-									twi_Call_count0++;
-									estricherfolg=SlavedatenSchreiben(ESTRICH_ADRESSE,  EstrichTXdaten);
-									
-									wdt_reset();
-									if (estricherfolg)
-									{
-										Write_Err |= (1<<ESTRICH);
+                           }
+                           
+                           uint8_t estricherfolg=0;
+                           
+                           //err_clr_part(0,0,10);
+                           //err_puts("E wr\0");
+                           wdt_reset();
+                           //					twi_Call_count0++;
+                           twi_Call_count0++;
+                           estricherfolg=SlavedatenSchreiben(ESTRICH_ADRESSE,  EstrichTXdaten);
+                           
+                           wdt_reset();
+                           if (estricherfolg)
+                           {
+                              Write_Err |= (1<<ESTRICH);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									else
-									{
-										twi_Reply_count0++;
-									}
-									
-									SchreibStatus &= ~(1<< ESTRICH);
-								}
+                           }
+                           else
+                           {
+                              twi_Reply_count0++;
+                           }
+                           
+                           SchreibStatus &= ~(1<< ESTRICH);
+                        }
                         
                         
-								//lesen von Estrich
-                                                
-								if (LeseStatus & (1<< ESTRICH))
-								{
-									
-									delay_ms(2);
-									wdt_reset();
-									twi_Call_count0++;
-									uint8_t estricherfolg=SlavedatenLesen(ESTRICH_ADRESSE, (void*)EstrichRXdaten);
-									wdt_reset();
-									if (estricherfolg)
-									{
-										Read_Err |= (1<<ESTRICH);
+                        //lesen von Estrich
+                        
+                        if (LeseStatus & (1<< ESTRICH))
+                        {
+                           
+                           delay_ms(2);
+                           wdt_reset();
+                           twi_Call_count0++;
+                           uint8_t estricherfolg=SlavedatenLesen(ESTRICH_ADRESSE, (void*)EstrichRXdaten);
+                           wdt_reset();
+                           if (estricherfolg)
+                           {
+                              Read_Err |= (1<<ESTRICH);
                               spistatus |= (1<<TWI_ERR_BIT);
-									}
-									else
-									{
-										BUS_Status |=(1<<SPI_SENDBIT);
-										twi_Reply_count0++;
-										
-										
-										if (EstrichRXdaten[6] & (1<<7)) // Bit 7 von [6] 
-										{
-											outbuffer[31] |= (1<<WASSERALARMESTRICH); // Alarmbit setzen
-										}
-										else 
-										{
-											outbuffer[31] &= ~(1<<WASSERALARMESTRICH); // Alarmbit zuruecksetzen
-										}
-										
-										//err_gotoxy(13,0);
-										//err_putc('E');
-										//err_putc('+');
-										//delay_ms(400);
-										
-										//pos >>4;
-										//err_gotoxy(7,1);
-										//err_puthex(pos);
-										//delay_ms(40);
-										
-										//lcd_gotoxy(6,1);
-										//lcd_putc('E');
-										//lcd_puthex(EstrichRXdaten[0]);
-										//lcd_puthex(EstrichRXdaten[1]);
-										//err_puthex(EstrichRXdaten[2]);
-										//err_puthex(EstrichRXdaten[3]);
-										//err_puthex(EstrichRXdaten[4]);
-										//err_puthex(EstrichRXdaten[5]);
-										//err_puthex(EstrichRXdaten[6]);
-										//err_puthex(EstrichRXdaten[7]);
-									}
-									
-									
-									// outbuffer von Estrich schreiben
-									
-									for (i=0 ; i<8; i++) 
-									{
-										//		outbuffer[i]=EstrichRXdaten[i];			// Fuer Test: Daten ab Byte 0 von outbuffer
-										outbuffer[estrich +i]=EstrichRXdaten[i]; // Daten ab Byte 'estrich' von outbuffer Byte 9
-									}
+                           }
+                           else
+                           {
+                              BUS_Status |=(1<<SPI_SENDBIT);
+                              twi_Reply_count0++;
+                              
+                              
+                              if (EstrichRXdaten[6] & (1<<7)) // Bit 7 von [6] 
+                              {
+                                 outbuffer[31] |= (1<<WASSERALARMESTRICH); // Alarmbit setzen
+                              }
+                              else 
+                              {
+                                 outbuffer[31] &= ~(1<<WASSERALARMESTRICH); // Alarmbit zuruecksetzen
+                              }
+                              
+                              //err_gotoxy(13,0);
+                              //err_putc('E');
+                              //err_putc('+');
+                              //delay_ms(400);
+                              
+                              //pos >>4;
+                              //err_gotoxy(7,1);
+                              //err_puthex(pos);
+                              //delay_ms(40);
+                              
+                              //lcd_gotoxy(6,1);
+                              //lcd_putc('E');
+                              //lcd_puthex(EstrichRXdaten[0]);
+                              //lcd_puthex(EstrichRXdaten[1]);
+                              //err_puthex(EstrichRXdaten[2]);
+                              //err_puthex(EstrichRXdaten[3]);
+                              //err_puthex(EstrichRXdaten[4]);
+                              //err_puthex(EstrichRXdaten[5]);
+                              //err_puthex(EstrichRXdaten[6]);
+                              //err_puthex(EstrichRXdaten[7]);
+                           }
+                           
+                           
+                           // outbuffer von Estrich schreiben
+                           
+                           for (i=0 ; i<8; i++) 
+                           {
+                              //		outbuffer[i]=EstrichRXdaten[i];			// Fuer Test: Daten ab Byte 0 von outbuffer
+                              outbuffer[estrich +i]=EstrichRXdaten[i]; // Daten ab Byte 'estrich' von outbuffer Byte 9
+                           }
                            /*
-                           lcd_gotoxy(0,3);
-                           lcd_putc('E');
-                           lcd_puthex(EstrichRXdaten[5]); // Kollektortemperatur
-                           lcd_puthex(EstrichRXdaten[6]); // 
-                           lcd_puthex(EstrichRXdaten[7]);// redKollektortemperatur>>1, Wert aus ADC / 2
-									*/
-									LeseStatus &= ~(1<< ESTRICH); // erledigt
-								}
-								
-							} // DCF77-erfolg==0
-							
-							//	Kontrolle: Labor schreiben: Schalter ein-aus nach jeder Minute
-							//if (DCF77daten[0]!=LaborDaten[8])//letzter Minutenwert war anders
-							{
-								//					LaborDaten[0]=DCF77daten[0]% 2;		// ON bei geraden Minuten
-								//					LaborDaten[1]=DCF77daten[0]% 2+1;	// OFF bei ungeraden Minuten
-								//					LaborDaten[8]= DCF77daten[0];
-							}
-							
-							if ((Menu_Ebene & 0xF0)>0)	//	Anzeigen wenn Menu_Ebene >0 
-							{
-								//err_gotoxy(10,0);
-								//err_puts("Mn \0");
-								//err_puthex(Menu_Ebene);
-								//err_puts("   \0");
-								wdt_reset();
-								displayRaum(Raum_Thema, AnzeigeWochentag, Zeit.stunde, Menu_Ebene);
-								wdt_reset();
-								//err_gotoxy(15,0);
-								//err_puts(" ok\0");
-								//		lcd_gotoxy(10,3);
-								//		lcd_puthex(Menu_Ebene);
-								// Doppelpunkt am Schluss der Zeile blinken lassen
-								lcd_gotoxy(19,1); 
-								lcd_putc(':');
-								
-							}
-							else
-							{
-								// Punkt am Schluss der Zeile blinken lassen
-								//lcd_gotoxy(19,1); 
-								//					lcd_putc(165);
-								
-							}
-							/*
-							 err_gotoxy(15,1);
-							 err_puthex(SchreibStatus);
-							 err_gotoxy(18,1);
-							 err_puthex(LeseStatus);
-							 delay_ms(1000);
-							 */
-							
-							//err_clr_part(0,0,9);
-							
-							//				err_puts("TWI \0");
+                            lcd_gotoxy(0,3);
+                            lcd_putc('E');
+                            lcd_puthex(EstrichRXdaten[5]); // Kollektortemperatur
+                            lcd_puthex(EstrichRXdaten[6]); // 
+                            lcd_puthex(EstrichRXdaten[7]);// redKollektortemperatur>>1, Wert aus ADC / 2
+                            */
+                           LeseStatus &= ~(1<< ESTRICH); // erledigt
+                        }
+                        
+                     } // DCF77-erfolg==0
+                     
+                     //	Kontrolle: Labor schreiben: Schalter ein-aus nach jeder Minute
+                     //if (DCF77daten[0]!=LaborDaten[8])//letzter Minutenwert war anders
+                     {
+                        //					LaborDaten[0]=DCF77daten[0]% 2;		// ON bei geraden Minuten
+                        //					LaborDaten[1]=DCF77daten[0]% 2+1;	// OFF bei ungeraden Minuten
+                        //					LaborDaten[8]= DCF77daten[0];
+                     }
+                     
+                     if ((Menu_Ebene & 0xF0)>0)	//	Anzeigen wenn Menu_Ebene >0 
+                     {
+                        //err_gotoxy(10,0);
+                        //err_puts("Mn \0");
+                        //err_puthex(Menu_Ebene);
+                        //err_puts("   \0");
+                        wdt_reset();
+                        displayRaum(Raum_Thema, AnzeigeWochentag, Zeit.stunde, Menu_Ebene);
+                        wdt_reset();
+                        //err_gotoxy(15,0);
+                        //err_puts(" ok\0");
+                        //		lcd_gotoxy(10,3);
+                        //		lcd_puthex(Menu_Ebene);
+                        // Doppelpunkt am Schluss der Zeile blinken lassen
+                        lcd_gotoxy(19,1); 
+                        lcd_putc(':');
+                        
+                     }
+                     else
+                     {
+                        // Punkt am Schluss der Zeile blinken lassen
+                        //lcd_gotoxy(19,1); 
+                        //					lcd_putc(165);
+                        
+                     }
+                     /*
+                      err_gotoxy(15,1);
+                      err_puthex(SchreibStatus);
+                      err_gotoxy(18,1);
+                      err_puthex(LeseStatus);
+                      delay_ms(1000);
+                      */
+                     
+                     //err_clr_part(0,0,9);
+                     
+                     //				err_puts("TWI \0");
 #pragma mark Fehlerbehandlung Start
-							
-							
-							// TWI-Fehler angeben
-							
-														
-							 err_gotoxy(0,1);
-							 err_puts("          \0");
-							 
-							 err_gotoxy(0,1);
-							 err_puts("E:\0");
-							 err_putc('R');
-							 err_puthex(Read_Err);
-							 
-							 err_putc('W');
-							 err_puthex(Write_Err);
-							 err_putc('E');
-							 err_puthex(EEPROM_Err);
-							 delay_ms(1000);
+                     
+                     
+                     // TWI-Fehler angeben
+                     
+                     err_gotoxy(10,0);
+                     err_putc('T');
+                     //err_clr_part(1,9,19);
+                     //err_puts("wl B er\0");
+                     err_puthex(TWI_FLAG);
+                     
+                     err_gotoxy(0,1);
+                     err_puts("          \0");
+                     
+                     err_gotoxy(0,1);
+                     err_puts("E:\0");
+                     err_putc('R');
+                     err_puthex(Read_Err);
+                     
+                     err_putc('W');
+                     err_puthex(Write_Err);
+                     err_putc('E');
+                     err_puthex(EEPROM_Err);
+                     delay_ms(1000);
                      
                      outbuffer[FEHLERBYTE]=Read_Err;      // Byte 24
                      outbuffer[FEHLERBYTE+1]=Write_Err;
                      outbuffer[FEHLERBYTE+2]=EEPROM_Err;
+                     outbuffer[37] = TWI_FLAG;
                      
-							if (twi_Call_count0==twi_Reply_count0) // alles OK
-							{
-								//err_puts("OK\0");
-								twi_Call_count0=0;
-								twi_Reply_count0=0;
-								twi_Stat_count=0; //	Stat_count zurücksetzen
-								
-							}
-							else
-							{
+                     if (twi_Call_count0==twi_Reply_count0) // alles OK
+                     {
+                        //err_puts("OK\0");
+                        twi_Call_count0=0;
+                        twi_Reply_count0=0;
+                        twi_Stat_count=0; //	Stat_count zurücksetzen
+                        
+                     }
+                     else
+                     {
                         
                         for (int i=44;i<48;i++)
                         {
@@ -4839,108 +5018,99 @@ int main (void)
                         {
                            //outbuffer[i+36]= EEPROMTXdaten[i];
                         }
-
-								//	Warten auf nächsten Timerevent
-								SchreibStatus=0;
-								LeseStatus=0;	
-								
-								//err_puthex(twi_Call_count0);
-								//err_putc(' ');
-								//err_puthex(twi_Reply_count0);
-								twi_Call_count0=0;
-								twi_Reply_count0=0;
-								
-								
-								
-								i2c_stop();
-								//TWI zuruecksetzen;
-								
-								TWCR =0;
-								
-								delay_ms(1000);
-								
-								//	TWI neu starten
-								i2c_init();
-								
-								// delay einfuegen
-								uint8_t reply_delay=0x0F;
-								
-								if (tempWDT_Count && (1<<6))// || (tempWDT_Count && (1<<6)))// zweiter wdt-Reset 
-								{
-									reply_delay = 2*reply_delay;	// laenger warten
-								}
-								
-								twi_Stat_count++;
-								err_gotoxy(18,1);
-								//err_puts("rep err\0");
-								err_puthex(twi_Stat_count);
-								if (twi_Stat_count>4)		// debloc
-								{
-									//err_gotoxy(14,1);
-									//err_puts("debl \0");
-									i2c_debloc();
-									
-								}
-								
-								if (twi_Stat_count>reply_delay) // reset
-								{
-									//WebTxStartDaten= MASTERERRTASK;
-									//WebTxDaten[0]=MASTERERRTASK;
-									
-									
-									/*
-									 tempWDT_Count=eeprom_read_byte(&WDT_ErrCount); //letzte gespeicherte wdt-Anzahl
-									 
-									 err_gotoxy(14,1);
-									 err_puts("wrp \0");
-									 err_puthex(tempWDT_Count);
-									 delay_ms(1000);
-									 tempWDT_Count++;
-									 tempWDT_Count |= (1<<6); // Reply-Bit setzen
-									 tempWDT_Count &= ~(1<<7); // wdt-Bit reseten
-									 eeprom_write_byte(&WDT_ErrCount,tempWDT_Count);
-									 cli();
-									 wdt_enable (WDTO_2S);
-									 while (1);
-									 */
-								}
-							}
-							
-							// Daten schreiben
-							
-							
-							// 10.12.09: Bedingung zur Vermeidung von Null-Datenserien
-							
-  //                   if (outbuffer[2]+outbuffer[3]+outbuffer[4])// Vorlauf, Ruecklauf und Aussen sind nie Null
-							{
-								spistatus |= (1<<SPI_SHIFT_IN_OK_BIT);
-								BUS_Status |= (1<<SPI_SENDBIT);				
-							}
-							
-							/*				
-							 outbuffer[0]=' ';
-							 outbuffer[1]='T';
-							 outbuffer[2]='W';
-							 outbuffer[3]='I';
-							 outbuffer[4]=' ';
-							 */
-							
-							lbyte=0;
-							hbyte=0;
-							in_startdaten=0;
-							
-							delay_ms(10); // Schwierigkeiten in Shift ohne Aufruf von clr_line
-							
-							Read_Device=0;
-							Write_Device=0;
-							LeseStatus=0;
-							SchreibStatus=0;
-							
-							OSZIAHI;
-							
-						}//	if ((SchreibStatus || LeseStatus))
-						
-					}break; // default: DATATASK
+                        
+                        //	Warten auf nächsten Timerevent
+                        SchreibStatus=0;
+                        LeseStatus=0;	
+                        
+                        //err_puthex(twi_Call_count0);
+                        //err_putc(' ');
+                        //err_puthex(twi_Reply_count0);
+                        twi_Call_count0=0;
+                        twi_Reply_count0=0;
+                        
+                        
+                        
+                        i2c_stop();
+                        //TWI zuruecksetzen;
+                        
+                        TWCR =0;
+                        
+                        delay_ms(1000);
+                        
+                        //	TWI neu starten
+                        i2c_init();
+                        
+                        // delay einfuegen
+                        uint8_t reply_delay=0x0F;
+                        
+                        if (tempWDT_Count && (1<<6))// || (tempWDT_Count && (1<<6)))// zweiter wdt-Reset 
+                        {
+                           reply_delay = 2*reply_delay;	// laenger warten
+                        }
+                        
+                        twi_Stat_count++;
+                        err_gotoxy(18,1);
+                        //err_puts("rep err\0");
+                        err_puthex(twi_Stat_count);
+                        if (twi_Stat_count>4)		// debloc
+                        {
+                           //err_gotoxy(14,1);
+                           //err_puts("debl \0");
+                           i2c_debloc();
+                           
+                        }
+                        
+                        if (twi_Stat_count>reply_delay) // reset
+                        {
+                           //WebTxStartDaten= MASTERERRTASK;
+                           //WebTxDaten[0]=MASTERERRTASK;
+                           
+                           
+                           /*
+                            tempWDT_Count=eeprom_read_byte(&WDT_ErrCount); //letzte gespeicherte wdt-Anzahl
+                            
+                            err_gotoxy(14,1);
+                            err_puts("wrp \0");
+                            err_puthex(tempWDT_Count);
+                            delay_ms(1000);
+                            tempWDT_Count++;
+                            tempWDT_Count |= (1<<6); // Reply-Bit setzen
+                            tempWDT_Count &= ~(1<<7); // wdt-Bit reseten
+                            eeprom_write_byte(&WDT_ErrCount,tempWDT_Count);
+                            cli();
+                            wdt_enable (WDTO_2S);
+                            while (1);
+                            */
+                        }
+                     }
+                     
+                     // Daten schreiben
+                     
+                     
+                     // 10.12.09: Bedingung zur Vermeidung von Null-Datenserien
+                     
+                     //                   if (outbuffer[2]+outbuffer[3]+outbuffer[4])// Vorlauf, Ruecklauf und Aussen sind nie Null
+                     {
+                        spistatus |= (1<<SPI_SHIFT_IN_OK_BIT);
+                        BUS_Status |= (1<<SPI_SENDBIT);				
+                     }
+                      lbyte=0;
+                     hbyte=0;
+                     in_startdaten=0;
+                     
+                     delay_ms(10); // Schwierigkeiten in Shift ohne Aufruf von clr_line
+                     
+                     Read_Device=0;
+                     Write_Device=0;
+                     LeseStatus=0;
+                     SchreibStatus=0;
+                     
+                     OSZIBHI;
+                     
+                  }//	if ((SchreibStatus || LeseStatus))
+                  
+               }break; // default: DATATASK
 						
 				}  // switch in_startdaten
 				

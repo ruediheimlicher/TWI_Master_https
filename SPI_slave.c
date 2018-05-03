@@ -117,6 +117,9 @@ static volatile uint8_t						startbitpos=0;
 #define SPI_CONTROL_SCK			PORTD2	// INT0 als Eingang fuer CLK
 #define SPI_CONTROL_CS_HC		PORTD3	// CS fuer HomeCentral Master
 
+#define STARTUP_PIN           PORTD4
+
+
 #define SPI_INT0_DDR				DDRD
 #define SPI_INT0_PORT			PORTD
 
@@ -224,7 +227,10 @@ void InitSPI_Slave(void)
 	SPI_INT0_DDR&= ~(1<<SPI_CONTROL_SCK);				// INT0 als SCK Eingang
 	SPI_INT0_PORT |=(1<<SPI_CONTROL_SCK);				// HI
 	
-//	PCICR |= (1<<PCIE0);
+   
+   SPI_CONTROL_DDR   |= (1<<STARTUP_PIN);  // Kontrolle HCT125. Invertierter EN. 
+   SPI_CONTROL_PORT   &= ~(1<<STARTUP_PIN); // LO an startup: SPI deaktiviert
+   //	PCICR |= (1<<PCIE0);
 //	PCMSK0 = (1<<PCINT0);
 	_delay_us(5);
 	// interrupt on INT0 pin falling edge (sensor triggered) 

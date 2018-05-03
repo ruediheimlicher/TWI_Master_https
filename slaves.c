@@ -14,6 +14,7 @@
 #define OSZIAPORTDDR			DDRA
 #define OSZIAPORTPIN			PINA
 #define PULSA					0
+#define PULSB               1
 
 #ifndef OSZIALO
 #define OSZIALO OSZIAPORT &= ~(1<<PULSA)
@@ -25,6 +26,17 @@
 #define OSZIATOG OSZIAPORT ^= (1<<PULSA)
 #endif
 
+#ifndef OSZIBLO
+#define OSZIBLO OSZIAPORT &= ~(1<<PULSB)
+#endif
+#ifndef OSZIBHI
+#define OSZIBHI OSZIAPORT |= (1<<PULSB)
+#endif
+#ifndef OSZIBTOG
+#define OSZIBTOG OSZIAPORT ^= (1<<PULSB)
+#endif
+
+
 #define buffer_size 8 
 #define tag_data_size 32
 #define tag_start_adresse 0
@@ -35,7 +47,7 @@
 extern volatile uint8_t rxbuffer[buffer_size];
 extern volatile uint8_t txbuffer[buffer_size];
 //extern char* wochentagstring[];
-
+extern volatile uint8_t TWI_FLAG;
 extern unsigned char WOCHENPLANBREITE;
 
 uint8_t SlaveSchreiben(unsigned char ADRESSE)
@@ -146,6 +158,7 @@ uint8_t SlaveSchreiben(unsigned char ADRESSE)
 
 uint8_t SlavedatenSchreiben(const unsigned char ADRESSE, const uint8_t *Daten)
 {
+   TWI_FLAG = 0;
 	/* Slave schreiben */
 	{
 
@@ -375,7 +388,7 @@ uint8_t SlaveLesen(unsigned char ADRESSE)
 
 uint8_t SlavedatenLesen(const unsigned char ADRESSE, uint8_t *Daten)
 {
-	
+	TWI_FLAG = 0;
 	uint8_t readerfolg=0;
 	readerfolg=(i2c_start(ADRESSE+I2C_WRITE));
 	if (readerfolg==0)
@@ -400,6 +413,7 @@ uint8_t SlavedatenLesen(const unsigned char ADRESSE, uint8_t *Daten)
 		else
 		{
 			i2c_stop();
+         
 			//err_clr_part(1,9,19);
 			//err_puthex(ADRESSE);
 			//err_puts(" r ad er\0");
@@ -469,7 +483,7 @@ uint8_t SlavedatenLesen(const unsigned char ADRESSE, uint8_t *Daten)
 			//delay_ms(10);
 	}
 	
-	
+   
 	return readerfolg;
 }
 

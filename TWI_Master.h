@@ -11,7 +11,7 @@
 
 #define TWICOUNTPIN				5
 
-#define CS_PIN						2
+
 						
 
 #define SERVOPORT					PORTC				// Ausgang fuer Servo
@@ -141,6 +141,7 @@ volatile uint8_t  	digitdelaycountH=0;
 volatile uint8_t		PaketNummer=0;
 
 volatile uint8_t		TWI_Flag=0;
+volatile uint8_t      TWI_FLAG=0;
 
 //uint16_t				brennerzeit=0;
 
