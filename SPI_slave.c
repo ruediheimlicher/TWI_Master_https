@@ -140,7 +140,7 @@ static volatile uint8_t						startbitpos=0;
 #define SUCCESS_BIT				3
 #define LB_BIT						4
 #define HB_BIT						5
-//#define SPI_ERR_BIT				6 -> Bit 6 ist SPI_SHIFT_IN_OK_BIT
+#define SPI_SHIFT_IN_OK_BIT   6
 #define TWI_ERR_BIT				7
 
 /*
