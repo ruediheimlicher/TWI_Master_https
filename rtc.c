@@ -650,8 +650,11 @@ uint8_t rtc_write_Zeit(uint8_t stunde, uint8_t minute, uint8_t sekunde)
 	uint8_t res;	//result
 	uint8_t wert;
 	//Start
-	rtc_start();
-	
+	uint8_t starterr = rtc_start();
+	if (starterr)
+   {
+      return starterr;
+   }
 	//SLA+W
 	res=rtc_writeByte(0xD0);	//DS1307 address + W
 	
@@ -699,31 +702,36 @@ uint8_t rtc_write_Datum(uint8_t wochentag, uint8_t tagdesmonats, uint8_t monat, 
 	uint8_t res;	//result
 	uint8_t wert;
 	//Start
-	rtc_start();
+   uint8_t starterr = rtc_start();
+   if (starterr)
+   {
+      return starterr;
+   }
+
 	
 	//SLA+W
 	res=rtc_writeByte(0xD0);	//DS1307 address + W
 	
 	//Error
-	if(res)	return 1;
+	if(res)	return 11;
 	
 	//Adresse des Registers schicken
 	res=rtc_writeByte(0x03);// wochentag
 	//Error
-	if(res)	return 2;
+	if(res)	return 12;
 
 	// Wochentag
 	wert=0;
 	res=rtc_writeByte(wochentag & 0x07);
 	//Error
-	if(res)	return 3;
+	if(res)	return 13;
 	delay_ms(1);
 	//Tag des Monats
 	wert=0;
 	wert=(((tagdesmonats/10)& 0x3F) << 4) + (tagdesmonats%10); // Bits 0-5
 	res=rtc_writeByte(wert);
 	//Error
-	if(res)	return 4;
+	if(res)	return 14;
 		
 	//Monat
 	wert=0;
@@ -731,7 +739,7 @@ uint8_t rtc_write_Datum(uint8_t wochentag, uint8_t tagdesmonats, uint8_t monat, 
 	res=rtc_writeByte(wert);
 
 	//Error
-	if(res)	return 5;
+	if(res)	return 15;
 
 	//Jahr
 	wert=0;
@@ -739,7 +747,7 @@ uint8_t rtc_write_Datum(uint8_t wochentag, uint8_t tagdesmonats, uint8_t monat, 
 	res=rtc_writeByte(wert);
 
 	//Error
-	if(res)	return 6;
+	if(res)	return 16;
 	
 	//STOP
 	rtc_stop();

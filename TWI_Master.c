@@ -226,12 +226,14 @@ static char SolarString[48];
 volatile uint8_t  uhrstatus =0;
 
 // defines fuer uhrstatus
-#define SYNC_OK		0	// Uhr ist synchronisiert
-#define SYNC_WAIT		1	// Uhr ist  wartet auf Synchronisation
-#define SYNC_READY	2	// DCF77 hat gueltiges Datum 
-#define SYNC_CHECK	3	// DCF77 soll Datum bereitstellen, Anzahl korrekte Daten abwarten
-#define SYNC_NULL		4	// Uhr ist undefiniert, wartet auf Synchronisation (nach restart)
-#define SYNC_NEW		5	// erste Synchrinisation nach Reset, noch keine gueltige Zeit
+#define SYNC_OK		   0	// Uhr ist synchronisiert
+#define SYNC_WAIT		   1	// Uhr ist  wartet auf Synchronisation
+#define SYNC_READY	   2	// DCF77 hat gueltiges Datum 
+#define SYNC_CHECK	   3	// DCF77 soll Datum bereitstellen, Anzahl korrekte Daten abwarten
+#define SYNC_NULL		   4	// Uhr ist undefiniert, wartet auf Synchronisation (nach restart)
+#define SYNC_NEW		   5	// erste Synchrinisation nach Reset, noch keine gueltige Zeit
+#define SYNC_WEBTIME    6  // Zeit wurde vom Webserver uebernommen
+#define SYNC_FIRSTRUN   7 // Erste Runde nach Start
 
 volatile uint8_t  DCF77_counter =0; // Anzahl gueltige Datumspakete in Folge
 #define MIN_SYNC		2	// Anzahl gueltige Daten fuer Synchronisation
@@ -1524,8 +1526,8 @@ int main (void)
 	uint8_t Tastenwert=0;
 	//	uint8_t Servowert=0;
 	
-	lcd_cls();
-	err_cls();
+	//lcd_cls();
+	//err_cls();
 	/*
 	lcd_gotoxy(14,0);
 	lcd_puts("V:\0");
@@ -1648,7 +1650,7 @@ int main (void)
 	/******************************************************************/
 	uhrstatus=0;
 	uhrstatus |= (1<<SYNC_NULL); // Uhr undef, warten auf DCF77
-	
+   uhrstatus |= (1<<SYNC_FIRSTRUN ); // erste Runde
 	initOSZI();
    
     /******************************************************************/
@@ -1658,6 +1660,7 @@ int main (void)
 	/******************************************************************/
 #pragma mark while
 	lcd_clr_line(0);
+   err_clr_line(0);
 	//lcd_puts("Los!\0");
 	delay_ms(10);
    
@@ -1701,9 +1704,9 @@ int main (void)
 				
             i2c_init();
 				
-				delay_ms(50);
+				delay_ms(500);
 				rtc_init();
-				delay_ms(10);
+				delay_ms(100);
 				uint8_t res=0;
 				
             /*
@@ -1789,8 +1792,8 @@ int main (void)
 			}
          if (startdelay)
          {
-            lcd_gotoxy(0,18);
-            lcd_putint2(startdelay);
+            //lcd_gotoxy(18,0);
+            //lcd_putint2(startdelay);
          }
 			if (loopcount1>=0x1F)
 			{
@@ -1850,8 +1853,8 @@ int main (void)
       {
          err_gotoxy(0,2);
          err_puts("ERR\0");
-         err_puthex(startdelay);
-         err_puthex(PORTC);
+        // err_puthex(startdelay);
+         //err_puthex(PORTC);
          /*
           
           1. TWI Modul am Master abschalten.
@@ -1865,6 +1868,8 @@ int main (void)
           */
          
          // Zaehlen, wieviele Runden der Fehler dauert
+         
+         /*
          twi_LO_count0++;
          
          // nach einer Anzahl Runden  die zweite Anzahl twi_LO_count1 inkrementieren
@@ -1911,7 +1916,7 @@ int main (void)
                
             }
          }
-         
+         */
       }
       
 		else // alles in Ordnung, Fehler zuruecksetzen
@@ -1978,66 +1983,91 @@ int main (void)
 					//lcd_puthex(inbuffer[j]);
 					//err_putc(inbuffer[j]);
 				}
-            lcd_putint(outbuffer[8]);
-            lcd_putc(' ');
+            //lcd_putint(outbuffer[8]);
+            //lcd_putc(' ');
             lcd_putint(SPI_Call_count0);
             
             lcd_gotoxy(12,2);
             lcd_putint2(inbuffer[16]);// stunde
             lcd_putint2(inbuffer[17]);// minute
             //lcd_putint2(inbuffer[18]);// wochentag
-            lcd_gotoxy(0,1);
-            lcd_putc('A');
-            if (uhrstatus & (1<<SYNC_NULL)) // Start, RTC setzen mit  Zeit vom Webserver
+            //lcd_gotoxy(0,1);
+            //lcd_putc('A');
+            if ((uhrstatus & (1<<SYNC_NULL)) && (!(uhrstatus & (1<<SYNC_FIRSTRUN) ))  ) // Start, RTC setzen mit  Zeit vom Webserver
             {
                uint8_t res = 0;
                res=rtc_write_Control(1);
-               lcd_putc('B');
+               //lcd_putc('B');
                // stunde, minute, sekunde
                res=rtc_write_Zeit(inbuffer[16],inbuffer[17],0);// uint8_t stunde, uint8_t minute, uint8_t sekunde
                delay_ms(30);
-               lcd_putc('C');
+               //lcd_putc('C');
                if (res)
                {
-                  err_gotoxy(15,0);
+                  err_gotoxy(11,0);
                   err_puts("Z-\0");
-                  err_puthex(res);
+                  err_putint1(res);
+                  std = inbuffer[16];
+                  Zeit.stunde = inbuffer[16];
+                  min = inbuffer[17];
+                  Zeit.minute = inbuffer[17];
+                  //err_putc('*');
                }
                else {
-                  err_gotoxy(15,0); 
-                  err_puts("Z+\0");
+                  err_gotoxy(11,0); 
+                  err_puts("Z+  \0");
                }
-               lcd_putc('D');
+               //lcd_putc('D');
                // Datum: 1 = Montag
                res=rtc_write_Datum(inbuffer[18],inbuffer[19],inbuffer[20],18);// uint8_t wochentag, uint8_t tagdesmonats, uint8_t monat, uint8_t jahr
                delay_ms(30);
-               lcd_putc('E');
+               //lcd_putc('E');
                if (res)
                {
-                  err_gotoxy(14,0);
-                  err_puts("  ");
+                  //err_gotoxy(14,0);
+                  //err_puts("  ");
                   
-                  err_gotoxy(14,0);
+                  err_gotoxy(15,0);
                   err_puts("D-\0");
-                  err_puthex(res);
+                  err_putint1(res);
+                  Zeit.wochentag = inbuffer[18];
+                  
+                  Zeit.kalendertag = inbuffer[19];
+                  Zeit.kalenderjahr = 18;
+                  /*
+                   Zeit.minute = RTCdaten[0];
+                   Zeit.stunde = RTCdaten[1];
+                   Zeit.kalendertag = RTCdaten[2];
+                   Zeit.kalendermonat = RTCdaten[3];
+                   Zeit.kalenderjahr = RTCdaten[4];
+                   Zeit.wochentag = RTCdaten[5]-1;   // RTC, DCF77: Montag=1; EEPROM: Montag=0
+
+                  */
+                  //err_putc('*');
+
                }
                else
                {
-                  err_gotoxy(17,0);
-                  err_puts("  ");
+                  //err_gotoxy(17,0);
+                  //err_puts("  ");
                   
-                  err_gotoxy(17,0);
-                  err_puts("D+\0");
+                  err_gotoxy(15,0);
+                  err_puts("D+  \0");
                }
-               lcd_putc('F');
+               //lcd_putc('F');
                oldmin = inbuffer[17];
                oldstd = inbuffer[16];
                oldtag = inbuffer[18];
-               uhrstatus &= ~(1<<SYNC_NULL);
-               lcd_putc('G');
+               if (res==0)
+               {
+                  uhrstatus &= ~(1<<SYNC_NULL);
+               }
+               //lcd_putc('G');
             }
+            
+            uhrstatus &= ~(1<<SYNC_FIRSTRUN);
 				OutCounter++;
-				lcd_putc('H');
+				//lcd_putc('H');
 				// Uebertragung pruefen
 				
 				//lcd_gotoxy(6,0);
@@ -2050,8 +2080,8 @@ int main (void)
             
 				err_gotoxy(19,0);
 				err_putc(' ');
-				err_gotoxy(19,0);
-            err_clr_line(1);
+				//err_gotoxy(19,0);
+          //  err_clr_line(1);
             //err_clr_line(2);
             
             //lcd_clr_line(2);
@@ -2059,9 +2089,10 @@ int main (void)
             
 				if (ByteCounter == SPI_BUFSIZE-1) // Uebertragung war vollstaendig
 				{
-               lcd_putc('I');
+               //lcd_putc('I');
 					if (out_startdaten + in_enddaten==0xFF)
 					{
+                  err_gotoxy(19,0);
 						err_putc('+');
 						spistatus |= (1<<SUCCESS_BIT); // Bit fuer vollstaendige und korrekte  Uebertragung setzen
 						lcd_gotoxy(19,0);
@@ -2135,14 +2166,14 @@ int main (void)
 				}
 				else 
 				{
-               lcd_putc('G');
+               //lcd_putc('G');
 					spistatus &= ~(1<<SUCCESS_BIT); //  Uebertragung unvollstaendig, Bit loeschen
 					
-               err_putc('!');
+               //err_putc('!');
               // err_clr_line(1);
               // err_clr_line(2);
 					err_gotoxy(0,2);
-					err_puts("E2\0");
+					err_puts("!E2\0");
                err_putint(ByteCounter);
 					err_putc(' ');
                err_puthex(in_lbdaten);
@@ -2161,9 +2192,9 @@ int main (void)
                in_startdaten = DATATASK; // 180414 weiterfahren wie bisher
 				}
 				
-            lcd_gotoxy(6,0);
-            lcd_puts("out");
-            lcd_puthex(out_startdaten);
+          //  lcd_gotoxy(6,0);
+          //  lcd_puts("out");
+          //  lcd_puthex(out_startdaten);
             //lcd_puthex(outbuffer[8]);
 				//lcd_gotoxy(11, 1);							// Events zahelen
 				//lcd_puthex(OutCounter);
@@ -2178,21 +2209,21 @@ int main (void)
 				 lcd_puthex(in_startdaten);
 				 //lcd_puthex(complement);
              
-             lcd_putc(' ');
-				 lcd_putc('a');
+             //lcd_putc(' ');
+				 //lcd_putc('a');
 				 //lcd_puthex(out_startdaten);
 				 //lcd_puthex(in_enddaten);
-             lcd_puthex(outbuffer[8]);
-            /*
+             //lcd_puthex(outbuffer[8]);
+            
 				 lcd_putc(' ');
 				 lcd_putc('l');
 				 lcd_puthex(in_lbdaten);
 				 lcd_putc(' ');
 				 lcd_putc('h');
 				 lcd_puthex(in_hbdaten);
-				 out_hbdaten++;
-				 out_lbdaten--;
-				 */
+				 //out_hbdaten++;
+				 //out_lbdaten--;
+				 
 				 
 				 
 				/*
@@ -2356,8 +2387,8 @@ int main (void)
 						lcd_puthex(in_lbdaten);
 						lcd_puts("         \0");
                   
-                  err_gotoxy(10,0);
-                  err_puthex(inbuffer[3]);
+                 // err_gotoxy(10,0);
+                 // err_puthex(inbuffer[3]);
                   outbuffer[3] = 0xBB;
                   
 						if (in_hbdaten == 0x01)// TWI solll wieder eingeschaltet werden
@@ -2719,9 +2750,9 @@ int main (void)
                   //err_gotoxy(5,1);
                   //Zaehler fuer TWI-Loop
                   //err_puthex(loopCounterTWI++);
-                  lcd_gotoxy(15,0);
+                  //lcd_gotoxy(15,0);
                   //						lcd_puts("U\0");
-                  lcd_putc(' ');
+                  //lcd_putc(' ');
                   OSZIBLO;
                   //err_gotoxy(0,0);
                   
@@ -2800,10 +2831,12 @@ int main (void)
                         }
                         else
                         {
+                           /*
                            err_gotoxy(13,0);
                            err_putc(' ');
                            err_putc(' ');
                            err_putc(' ');
+                            */
                            err_gotoxy(19,0);
                            err_putc('+');
                            
@@ -2811,10 +2844,10 @@ int main (void)
                      }
                      
                      
-                     lcd_gotoxy(16,0);
-                     lcd_putc('+');
+                     //lcd_gotoxy(16,0);
+                     //lcd_putc('+');
                      
-                     lcd_putint2(DCF77daten[1]);
+                     //lcd_putint2(DCF77daten[1]);
                      //lcd_putc(':');
                      //lcd_putint2(DCF77daten[0]);
                      
@@ -2861,7 +2894,7 @@ int main (void)
                         }
                         else // Wert ist OK
                         {
-                           lcd_gotoxy(16, 1);
+                           lcd_gotoxy(19, 1);
                            lcd_putc('+');
                            //lcd_putint2(DCF77daten[0]);         // Minuten
                            // erste Synchronisation?
@@ -2871,7 +2904,7 @@ int main (void)
                               oldmin=DCF77daten[0];
                               oldstd=DCF77daten[1];
                               oldtag=DCF77daten[2];
-                              uhrstatus &= ~(1<<SYNC_NULL);
+               //180502               uhrstatus &= ~(1<<SYNC_NULL);
                               //        uhrstatus |= (1<<SYNC_NEW);         // TWI soll noch keine Daten uebertragen
                            }
                            else if (!(oldmin == DCF77daten[0]))   // minute hat sich geaendert
@@ -2989,6 +3022,7 @@ int main (void)
                            err_putc('!');
                            
                            outbuffer[6] = RTC_erfolg;
+                           
                            // aktuelle Schlaufe verlassen
                         }
                         else
@@ -3010,8 +3044,12 @@ int main (void)
                      }
                      // Ende Synchronisation
                   } // if NOT test
+                  err_gotoxy(16,2);
+                  err_puthex(uhrstatus);
                   err_gotoxy(18,2);
                   err_puthex(TWI_FLAG);
+                  
+                  outbuffer[39] = TWI_FLAG;
                   
                   outbuffer[46] = RTCdaten[1]; // stunde
                   outbuffer[47] = RTCdaten[0]; // minute
@@ -3057,12 +3095,12 @@ int main (void)
                      SchreibStatus=0; 
                      LeseStatus=0;
                   }
-                  /*
+                  
                    LeseStatus |= (1<<OG2);
-                   LeseStatus |= (1<<BUERO);
+                   //LeseStatus |= (1<<BUERO);
                    SchreibStatus |= (1<<OG2);
-                   SchreibStatus |= (1<<BUERO);
-                   */
+                   //SchreibStatus |= (1<<BUERO);
+                   
                   
                   outbuffer[43] = LeseStatus;
                   outbuffer[44] = SchreibStatus;
@@ -3100,12 +3138,12 @@ int main (void)
                   Read_Err=0;
                   EEPROM_Err=0;
                   
-                  lcd_gotoxy(14,0);
+                  lcd_gotoxy(12,0);
                   lcd_putint2(std);
                   lcd_putc(':');
                   lcd_putint2(min);
                   
-                  if ((SchreibStatus || LeseStatus))// && (!(uhrstatus & (1<<SYNC_NEW))))		// Uhr nicht gerade am Synchronisieren
+                  if ((SchreibStatus || LeseStatus))// && (!(uhrstatus & (1<<SYNC_FIRSTRUN))))		// Uhr nicht gerade am Synchronisieren
                   // && (twi_HI_count0 >= 0x02))//&&(TastaturCount==0))
                   {
                      TWI_FLAG = 0;
@@ -3146,10 +3184,10 @@ int main (void)
                         std= RTCdaten[1];
                         tag= RTCdaten[2];
                         
-                        lcd_gotoxy(14,0);
-                        lcd_putint2(std);
-                        lcd_putc(':');
-                        lcd_putint2(min);
+                        //lcd_gotoxy(14,0);
+                        //lcd_putint2(std);
+                        //lcd_putc(':');
+                        //lcd_putint2(min);
                         /*								
                          min= DCF77daten[0];
                          std= DCF77daten[1];
@@ -4973,7 +5011,7 @@ int main (void)
                      
                      // TWI-Fehler angeben
                      
-                     err_gotoxy(10,0);
+                     err_gotoxy(8,2);
                      err_putc('T');
                      //err_clr_part(1,9,19);
                      //err_puts("wl B er\0");
@@ -4991,7 +5029,7 @@ int main (void)
                      err_puthex(Write_Err);
                      err_putc('E');
                      err_puthex(EEPROM_Err);
-                     delay_ms(1000);
+                     delay_ms(10);
                      
                      outbuffer[FEHLERBYTE]=Read_Err;      // Byte 24
                      outbuffer[FEHLERBYTE+1]=Write_Err;

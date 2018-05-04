@@ -492,9 +492,9 @@ void WochentagZeigen(const uint8_t Daten[], uint8_t Tag, uint8_t Stunde)
 {
 	char* wochentag[] = {"MO","DI","MI","DO","FR","SA","SO"};
 	uint8_t line=2;
-	lcd_clr_line(2);
-	lcd_gotoxy(0,2);
-	lcd_puts(wochentag[Tag]);
+	//lcd_clr_line(2);
+	//lcd_gotoxy(0,2);
+	//lcd_puts(wochentag[Tag]);
 /*	
 Daten: 8 Bytes, 4 Stunden pro Byte
 Bit 7, 6: Stunde 0
