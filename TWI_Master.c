@@ -1257,6 +1257,55 @@ uint8_t RTC_Abrufen (void)
 	// end Uhr lesen
 }
 
+void RTC_Aktualisieren(void)
+{
+   uint8_t versuche=0;
+   uint8_t RTC_erfolg=1;
+   err_gotoxy(19,0);
+   err_putc(' ');
+   
+   while (RTC_erfolg && versuche<0x0F)
+   {
+      RTC_erfolg = RTC_Abrufen();
+      err_gotoxy(4,0);
+      err_puts("R1\0");
+      //err_putc(' ');
+      err_puthex(RTC_erfolg);
+      err_putc(' ');
+      err_puthex(versuche);
+      versuche++;
+   }
+   
+   if (RTC_erfolg)            // Fehler, aussteigen
+   {
+      SchreibStatus=0;
+      LeseStatus=0;
+      err_gotoxy(4,0);
+      err_puts("RTC1\0");
+      err_putc('*');
+      err_puthex(RTC_erfolg);
+      err_gotoxy(19,0);
+      err_putc('!');
+      
+      outbuffer[6] = RTC_erfolg;
+      //break;                     // aktuelle Schlaufe verlassen
+      
+   }
+   else
+   {
+      /*
+       err_gotoxy(13,0);
+       err_putc(' ');
+       err_putc(' ');
+       err_putc(' ');
+       */
+      err_gotoxy(19,0);
+      err_putc('+');
+      
+   }
+}
+
+
 const char *byte2binary(int x)
 {
    static char b[9];
@@ -1938,7 +1987,7 @@ int main (void)
 		
 		//err_gotoxy(19,0);
 		//err_putc('-');
-		
+		// (spistatus & (1<<ACTIVE_BIT))
 		// ***********************
 		if (SPI_CONTROL_PORTPIN & (1<< SPI_CONTROL_CS_HC)) // CS ist HI, SPI beendet
 		{
@@ -2313,7 +2362,8 @@ int main (void)
 				
 					
 			}//		if (!(spistatus & (1<<ACTIVE_BIT)))
-		}//											(IS_CS_HC_ACTIVE) 
+		
+      }//											(IS_CS_HC_ACTIVE) 
 		
 		/* *** SPI end **************************************************************/
 	
@@ -2793,54 +2843,9 @@ int main (void)
                   {
                      
 #pragma mark Uhr
-                     //TWBR=48;
-                     if (!(uhrstatus & (1<<SYNC_NULL)))     // Nach reset, rtc noch nicht abfragen
-                     
+                     if (!(uhrstatus & (1<<SYNC_NULL)))     // Nach reset oder am start rtc noch nicht abfragen
                      {
-                        uint8_t versuche=0;
-                        uint8_t RTC_erfolg=1;
-                        
-                        //         RTC_erfolg = RTC_Abrufen();
-                        while (RTC_erfolg && versuche<0x0F)
-                        {
-                           RTC_erfolg = RTC_Abrufen();
-                           err_gotoxy(4,0);
-                           err_puts("R1\0");
-                           //err_putc(' ');
-                           err_puthex(RTC_erfolg);
-                           err_putc(' ');
-                           err_puthex(versuche);
-                           versuche++;
-                        }
-                        
-                        //OSZIBHI;
-                        
-                        if (RTC_erfolg)				// Fehler, aussteigen
-                        {
-                           SchreibStatus=0;
-                           LeseStatus=0;
-                           err_gotoxy(4,0);
-                           err_puts("RTC1\0");
-                           err_putc('*');
-                           err_puthex(RTC_erfolg);
-                           //err_putc('!');
-                           
-                           outbuffer[6] = RTC_erfolg;
-                           //break;							// aktuelle Schlaufe verlassen
-                           
-                        }
-                        else
-                        {
-                           /*
-                           err_gotoxy(13,0);
-                           err_putc(' ');
-                           err_putc(' ');
-                           err_putc(' ');
-                            */
-                           err_gotoxy(19,0);
-                           err_putc('+');
-                           
-                        }
+                        RTC_Aktualisieren();
                      }
                      
                      
@@ -2904,7 +2909,7 @@ int main (void)
                               oldmin=DCF77daten[0];
                               oldstd=DCF77daten[1];
                               oldtag=DCF77daten[2];
-               //180502               uhrstatus &= ~(1<<SYNC_NULL);
+                              //180502               uhrstatus &= ~(1<<SYNC_NULL);
                               //        uhrstatus |= (1<<SYNC_NEW);         // TWI soll noch keine Daten uebertragen
                            }
                            else if (!(oldmin == DCF77daten[0]))   // minute hat sich geaendert
@@ -3152,9 +3157,6 @@ int main (void)
                      out_startdaten= DATATASK;//	C0: Daten sammeln fuer den Webserver
                      
                      
-                     // Versuch 12.08: Verblassen des 2*20-LCD verhindern
-                     //err_initialize(ERR_FUNCTION_8x2, ERR_CMD_ENTRY_INC, ERR_CMD_ON);
-                     
                      twi_Call_count0=0;
                      twi_Reply_count0=0;
                      twi_Stat_count=0; //	Stat_count zurŸcksetzen
@@ -3170,34 +3172,15 @@ int main (void)
                         {
                            //outbuffer[i]=0;
                         }
-                        //err_gotoxy(15,0);
-                        //err_putc('U');
-                        
+                         
                         wdt_reset();
-                        //twi_Reply_count0++; // Call ist OK
-                        //lcd_clr_part(0,12,19);
-                        //lcd_gotoxy(12,0);
-                        //lcd_gotoxy(15,0);
-                        //lcd_put_zeit(DCF77daten[0],DCF77daten[1]);
                         
                         min= RTCdaten[0];
                         std= RTCdaten[1];
                         tag= RTCdaten[2];
                         
-                        //lcd_gotoxy(14,0);
-                        //lcd_putint2(std);
-                        //lcd_putc(':');
-                        //lcd_putint2(min);
-                        /*								
-                         min= DCF77daten[0];
-                         std= DCF77daten[1];
-                         tag= DCF77daten[5];
-                         lcd_gotoxy(17,0);
-                         lcd_putint2(min);
-                         */								
-                        //uint8_t StundenCode=0;
                         
-                        //	Brennerlaufzeit addieren
+                        //	Zeit vorwaertsstellen
                         if ((min > Zeit.minute) || ((min ==0)&&(std==0)) || (std> Zeit.stunde) ) //neue Minute oder neue Stunde oder neuer Tag
                         {
                            uint8_t synchfehler=0;
@@ -5191,6 +5174,10 @@ int main (void)
 			spistatus &= ~(1<<SPI_SHIFT_IN_OK_BIT);
 		} // if (spistatus & (1<<SPI_SHIFT_IN_OK_BIT))	
 		
+      else // 
+      {
+         
+      }
       
 		
 		
