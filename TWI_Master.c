@@ -1395,6 +1395,7 @@ void DataTask(void)
 #pragma mark Uhr
       if (!((uhrstatus & (1<<SYNC_NULL)) || (uhrstatus & (1<<SYNC_WAIT))))     // Nach reset oder am start rtc noch nicht abfragen
       {
+         
          RTC_Aktualisieren();
       }
       
@@ -1560,11 +1561,12 @@ void DataTask(void)
             lcd_putint2(DCF77daten[0]);
             lcd_putc(':');
             lcd_putint1(DCF77daten[5]-1);
-            lcd_puts(" SYNC +");
+            lcd_puts(" SYNC+");
          }
          lcd_gotoxy(16, 1);
          lcd_puts("   \0");
          
+         // ev. weg
          uint8_t RTC_erfolg = RTC_Abrufen();
          if (RTC_erfolg)                           // Fehler, aussteigen
          {
@@ -4071,6 +4073,10 @@ int main (void)
    uhrstatus |= (1<<SYNC_FIRSTRUN ); // erste Runde
 	initOSZI();
    
+   // Werte default
+   min = 0;
+   std = 12;
+
     /******************************************************************/
 
 	/*** Hauptschleife															***/
@@ -4405,21 +4411,27 @@ int main (void)
             
             lcd_gotoxy(12,2);
             lcd_putint2(inbuffer[16]);// stunde
+            lcd_putc(':');
             lcd_putint2(inbuffer[17]);// minute
             //lcd_putint2(inbuffer[18]);// wochentag
             //lcd_gotoxy(0,1);
             //lcd_putc('A');
             // Start, RTC setzen mit  Zeit vom Webserver
-            if ((uhrstatus & (1<<SYNC_NULL)) && (!(uhrstatus & (1<<SYNC_FIRSTRUN) ))  ) 
             
+            // SYNC_NULL ist noch gesetzt: Noch keine Zeit eingesetzt
+            // SYNC_FIRSTRUN muss geloescht sein, um die Zeit einzusetzen. Zeit kommt mit dem ersten SPI-Paket
+            if ((uhrstatus & (1<<SYNC_NULL)) && (!(uhrstatus & (1<<SYNC_FIRSTRUN) ))) 
             {
+               
                uint8_t res = 0;
                res=rtc_write_Control(1);
                delay_ms(30);
+               
+               
                //lcd_putc('B');
-               // stunde, minute, sekunde
+               // Zeit setzen: stunde, minute, sekunde
                res=rtc_write_Zeit(inbuffer[16],inbuffer[17],0);// uint8_t stunde, uint8_t minute, uint8_t sekunde
-               delay_ms(30);
+               delay_ms(10);
                //lcd_putc('C');
                if (res)
                {
@@ -4437,9 +4449,10 @@ int main (void)
                   err_puts("Z+  \0");
                }
                //lcd_putc('D');
-               // Datum: 1 = Montag
+               
+               // Datum setzen: 1 = Montag
                res=rtc_write_Datum(inbuffer[18],inbuffer[19],inbuffer[20],18);// uint8_t wochentag, uint8_t tagdesmonats, uint8_t monat, uint8_t jahr
-               delay_ms(30);
+               delay_ms(10);
                //lcd_putc('E');
                if (res)
                {
@@ -4462,7 +4475,7 @@ int main (void)
                    Zeit.wochentag = RTCdaten[5]-1;   // RTC, DCF77: Montag=1; EEPROM: Montag=0
 
                   */
-                  //err_putc('*');
+                  err_putc('*');
 
                }
                else
@@ -4479,12 +4492,16 @@ int main (void)
                oldtag = inbuffer[18];
                if (res==0)
                {
+                  std = inbuffer[16];
+                  min = inbuffer[17];
+                  //lcd_gotoxy(16,3);
+                  //lcd_putc('F');
                   uhrstatus &= ~(1<<SYNC_NULL);
                }
                //lcd_putc('G');
             }
             
-            // FIRSTRUN nach erster SPI-Sequenz resetten
+            // FIRSTRUN nach erster SPI-Sequenz loeschen
             uhrstatus &= ~(1<<SYNC_FIRSTRUN);
 				OutCounter++;
 				
@@ -4495,11 +4512,15 @@ int main (void)
 				err_gotoxy(19,0);
 				err_putc(' ');
             
-            // Uebertragung pruefen
+            
+            
+#pragma mark Uebertragung pruefen
+            
+            
 				if (ByteCounter == SPI_BUFSIZE-1) // Uebertragung war vollstaendig
 				{
                //lcd_putc('I');
-					if (out_startdaten + in_enddaten==0xFF)
+					if (out_startdaten + in_enddaten==0xFF) // alles OK
 					{
                   err_gotoxy(19,0);
 						err_putc('+');
@@ -4632,10 +4653,10 @@ int main (void)
              //lcd_puthex(outbuffer[8]);
             
 				 lcd_putc(' ');
-				 lcd_putc('l');
+				 //lcd_putc('l');
 				 lcd_puthex(in_lbdaten);
-				 lcd_putc(' ');
-				 lcd_putc('h');
+				 //lcd_putc(' ');
+				 //lcd_putc('h');
 				 lcd_puthex(in_hbdaten);
 				 //out_hbdaten++;
 				 //out_lbdaten--;
@@ -4656,9 +4677,9 @@ int main (void)
 				//lcd_puthex(errCounter);
 				
 				
-				// ACTIVE_BIT loeschen, wurde 
+				// ACTIVE_BIT loeschen
             
-            spistatus &= ~(1<<ACTIVE_BIT);		// Bit 0 loeschen, wurde nach 'neu aktiv' gesetzt
+            spistatus &= ~(1<<ACTIVE_BIT);		// Bit  loeschen, wurde nach 'neu aktiv' gesetzt
 				
             // Bits im Zusammenhang mit der Uebertragung zuruecksetzen. Wurden in ISR gesetzt
             spistatus &= ~(1<<STARTDATEN_BIT);	// Bit 1 loeschen
@@ -4697,8 +4718,6 @@ int main (void)
 #pragma mark HomeCentral-Tasks 
 		
 		} // if (SPI_CONTROL_PORTPIN & (1<< SPI_CONTROL_CS_HC)) // CS ist HI, SPI beendet
-		
-		
 		// letzte Daten vom Webserver sind in inbuffer und in in_startdaten, in_lbdaten, in_hbdaten
 				
 		else						// CS ist LO (IS_CS_HC_ACTIVE)
@@ -4707,7 +4726,7 @@ int main (void)
 			{
 				// Aufnahme der Daten vom Webserver vorbereiten
 				uint8_t j=0;
-				in_startdaten=0;
+				in_startdaten=0; 
 				in_enddaten=0;
 				in_lbdaten=0;
 				in_hbdaten=0;
@@ -4717,15 +4736,12 @@ int main (void)
 				}
 				
 				spistatus |=(1<<ACTIVE_BIT); // Bit 0 setzen: neue Datenserie
-				spistatus |=(1<<STARTDATEN_BIT); // Bit 1 setzen: erster Wert ergibt StartDaten
+				spistatus |=(1<<STARTDATEN_BIT); // Bit 1 setzen: erster Wert in SPI ergibt StartDaten
             
             
-            in_startdaten = MASTERTASK; // default ohne SPI-Eingang
+            //in_startdaten = MASTERTASK; // default ohne SPI-Eingang
             
-            // Werte default
-            min = 0;
-            std = 12;
-            
+             
             
             bitpos=0;
 				ByteCounter=0;
@@ -4798,7 +4814,7 @@ int main (void)
 						
 						
 					}break;
-						
+#pragma mark STATUSTASK						
 					case STATUSTASK:	// B1: in_hbdaten enthaelt Status
 					{
 						//Statustask abfragen, bei Status 0 TWI deaktivieren: Keine Stoerungen duch SPI-Aufrufe des Timers
@@ -4871,7 +4887,7 @@ int main (void)
 						in_lbdaten=0;
 					}break;
 						
-						
+#pragma mark  EEPROMREADTASK						
 					case EEPROMREADTASK: // B8
 					{
 						// Auftrag vom Webserver, die Daten im EEPROM an hb, lb zu lesen 
@@ -4974,7 +4990,8 @@ int main (void)
 						
 						
 					}break;
-						
+                  
+#pragma mark  EEPROMWRITETASK						
 					case EEPROMWRITETASK:
 					{
 						/* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++  */
@@ -5099,7 +5116,8 @@ int main (void)
 						//delay_ms(200);
 						
 					}break; // EEPROMWRITETASK
-                  
+
+#pragma mark  EEPROMCONFIRMTASK                  
                case EEPROMCONFIRMTASK:
                {
                   out_startdaten= EEPROMCONFIRMTASK; // B5
@@ -5140,20 +5158,21 @@ int main (void)
                   }
                }break;
 						
-						
+#pragma mark DATATASK						
 					case DATATASK:
 						
 					//default:						// DATATASK
                {
                   
-#pragma mark Lese- und Schreibstatus setzen und abarbeiten
                   DataTask();
                   
                   // Code DATATASK
                  
                }break; // default: DATATASK
+                  
+#pragma mark  MASTERTASK
 						
-                  case MASTERTASK: // kein SPI
+               case MASTERTASK: // kein SPI
                {
                   spistatus &= ~(1<<ACTIVE_BIT);
                   lcd_gotoxy(0,0);
@@ -5164,6 +5183,7 @@ int main (void)
                   //DataTask();
 
                }break;
+                
 				}  // switch in_startdaten
 				
 			} 
