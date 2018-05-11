@@ -1417,6 +1417,7 @@ void DataTask(void)
       //sync start
       // alle 60 Min: Warten starten
       //if ((((min/30)&&(min%30==0)&&(std<23))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
+ /*
       if (((min/30)&&(min%30==0)&&(std<23)) && (!(uhrstatus & (1<<SYNC_WAIT))))
       {
          {
@@ -1434,7 +1435,7 @@ void DataTask(void)
          }
          
       }
-      
+  */    
       
       if (uhrstatus & (1<<SYNC_WAIT)) // Warten auf genuegende Anzahl korrekter Daten
       {
@@ -4443,7 +4444,7 @@ int main (void)
                //lcd_putc('C');
                if (res)
                {
-                  err_gotoxy(11,0);
+                  err_gotoxy(12,0);
                   err_puts("Z-\0");
                   err_putint1(res);
                   std = inbuffer[16];
@@ -4453,8 +4454,11 @@ int main (void)
                   //err_putc('*');
                }
                else {
-                  err_gotoxy(11,0); 
-                  err_puts("Z+  \0");
+                  err_gotoxy(12,0);
+                  err_puts("   ");
+                  err_gotoxy(15,0); 
+                  
+                  err_puts("Z+\0");
                }
                //lcd_putc('D');
                
