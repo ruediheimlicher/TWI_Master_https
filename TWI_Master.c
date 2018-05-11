@@ -194,7 +194,7 @@ static char SolarString[48];
 #define PWMREADTASK        0xBA  // PWM-Daten vom EEPROM lesen und an Zielraum schicken (synchronisierung)
 
 #define SYNCWAITTASK       0xBB // Sync im gang
-#define SYNCOKTASK         0xBB // Sync OK
+#define SYNCOKTASK         0xBC // Sync OK
 
 #define DATATASK				0xC0	// Normale Loop im Webserver
 
@@ -3454,7 +3454,7 @@ void DataTask(void)
                {
                   outbuffer[31] &= ~(1<<WASSERALARMESTRICH); // Alarmbit zuruecksetzen
                }
-               
+               outbuffer[33] = out_startdaten;
                //err_gotoxy(13,0);
                //err_putc('E');
                //err_putc('+');
@@ -4074,7 +4074,7 @@ int main (void)
 	initOSZI();
    
    // Werte default
-   min = 0;
+   min = 20; // sync soll bald anfangen
    std = 12;
 
     /******************************************************************/
@@ -4133,14 +4133,14 @@ int main (void)
 				delay_ms(200);
 				uint8_t res=0;
 				
-            /*
+            
 				res=rtc_write_Control(1);
-				
+				delay_ms(10);
 				// stunde, minute, sekunde
-				res=rtc_write_Zeit(14,38,0);// uint8_t stunde, uint8_t minute, uint8_t sekunde
+				uint8_t zeitres=rtc_write_Zeit(6,20,0);// uint8_t stunde, uint8_t minute, uint8_t sekunde
             delay_ms(10);
 				
-				if (res)
+				if (zeitres)
 				{
 					err_gotoxy(15,0);
 					err_puts("Z-\0");
@@ -4151,10 +4151,10 @@ int main (void)
 				}
 				
 				// Datum: 1 = Montag
-				res=rtc_write_Datum(6,23,4,17);// uint8_t wochentag, uint8_t tagdesmonats, uint8_t monat, uint8_t jahr
+				uint8_t datres=rtc_write_Datum(6,1,1,18);// uint8_t wochentag, uint8_t tagdesmonats, uint8_t monat, uint8_t jahr
 				delay_ms(10);
 				
-				if (res)
+				if (datres)
 				{
                err_gotoxy(17,0);
 					err_puts("  ");
@@ -4170,9 +4170,12 @@ int main (void)
 					err_gotoxy(17,0);
 					err_puts("D+\0");
 				}
-				
+				if (res + zeitres + datres == 0) // Uhr aktiviert
+            {
+               uhrstatus |= (1<<SYNC_NEW); // noch keine gueltige Zeit
+            }
 				wdt_reset();
-             */
+             
 				sei();
 				
             SPI_CONTROL_PORT |= (1<<STARTUP_PIN); // soft-SPI aktivieren
@@ -4276,7 +4279,12 @@ int main (void)
 		if (((startdelay==0)||(startdelay==STARTDELAY))&& (((!(PINC & (1<<SDAPIN))) && PINC & (1<<SCLPIN)) ) )// SDA ist LO UND SCL ist HI (warten auf Ack)
       {
          err_gotoxy(0,2);
+         err_puthex(startdelay);
+         err_putc(' ');
+         err_puthex(PORTC);
+         err_putc(' ');
          err_puts("ERR\0");
+         
         // err_puthex(startdelay);
          //err_puthex(PORTC);
          /*
@@ -4399,7 +4407,7 @@ int main (void)
 				lcd_puthex(in_lbdaten);
 				lcd_putc(' ');
 				uint8_t j=0;
-				for (j=0;j<1;j++)
+				for (j=0;j<2;j++)
 				{
 					//lcd_putc(' ');
 					//lcd_puthex(inbuffer[j]);
@@ -4497,6 +4505,7 @@ int main (void)
                   //lcd_gotoxy(16,3);
                   //lcd_putc('F');
                   uhrstatus &= ~(1<<SYNC_NULL);
+                  uhrstatus &= ~(1<<SYNC_NEW); 
                }
                //lcd_putc('G');
             }
@@ -4520,6 +4529,7 @@ int main (void)
 				if (ByteCounter == SPI_BUFSIZE-1) // Uebertragung war vollstaendig
 				{
                //lcd_putc('I');
+               spistatus |= (1<<SPI_SHIFT_IN_OK_BIT);
 					if (out_startdaten + in_enddaten==0xFF) // alles OK
 					{
                   err_gotoxy(19,0);
@@ -4589,13 +4599,13 @@ int main (void)
 						err_putc(' ');
 						err_puthex(out_startdaten + in_enddaten);
                   
-                  spistatus &= ~(1<<SPI_SHIFT_IN_OK_BIT);
+  //                spistatus &= ~(1<<SPI_SHIFT_IN_OK_BIT);
                   
  						{
 							SendErrCounter++;
 						}
 						//errCounter++;
-                  in_startdaten = DATATASK; // 180414 weiterfahren wie bisher
+                  in_startdaten = MASTERTASK; // 180414 weiterfahren wie bisher
                   
 					}
 					
@@ -4604,7 +4614,7 @@ int main (void)
 				{
                //lcd_putc('G');
 					spistatus &= ~(1<<SUCCESS_BIT); //  Uebertragung unvollstaendig, Bit loeschen
-					
+					spistatus |= (1<<SPI_SHIFT_IN_OK_BIT);
                //err_putc('!');
               // err_clr_line(1);
               // err_clr_line(2);
@@ -4623,9 +4633,9 @@ int main (void)
 					//delay_ms(100);
 					//errCounter++;
 					IncompleteCounter++;
-                spistatus &= ~(1<<SPI_SHIFT_IN_OK_BIT);
+ //              spistatus &= ~(1<<SPI_SHIFT_IN_OK_BIT);
                
-               in_startdaten = DATATASK; // 180414 weiterfahren wie bisher
+               in_startdaten = MASTERTASK; // 180505 MASTERTASK   (180414 weiterfahren wie bisher)
                
 				}
 				
@@ -4768,7 +4778,9 @@ int main (void)
       /* *** SPI Daten auswerten *****************************************/
       
       /* *****************************************************************/
-      
+      //lcd_gotoxy(0,0);
+      //lcd_puts("      \0");
+     
 		if ((spistatus & (1<<SPI_SHIFT_IN_OK_BIT)))// && (!(uhrstatus & (1<<SYNC_FIRSTRUN) )) )	// Shift-Bit ist nach 'neu PASSIVE' gesetzt, Datentausch ist erfolgt und OK
 		{
 			spistatus &= ~(1<<TWI_ERR_BIT);	// Bit fuer Fehler zuruecksetzen
@@ -4780,6 +4792,8 @@ int main (void)
 					//err_puts("Los\0");
 					in_startdaten=DATATASK;
 				}
+            
+            
 				//	******************************
 				// Tasks mit Webserver behandeln
 				//	******************************
@@ -4804,6 +4818,7 @@ int main (void)
 				//lcd_puthex(spistatus);
 				//lcd_puthex(BUS_Status);
 				lcd_puthex(in_startdaten);
+
 				//delay_ms(100);
             outbuffer[42] = in_startdaten;
             //lcd_clr_line(2);
@@ -4833,10 +4848,12 @@ int main (void)
                   
                  // err_gotoxy(10,0);
                  // err_puthex(inbuffer[3]);
+                  
                   outbuffer[3] = 0xBB;
                   
 						if (in_hbdaten == 0x01)// TWI solll wieder eingeschaltet werden
 						{
+                     out_startdaten= DATATASK;
 							BUS_Status |=  (1<<TWI_CONTROLBIT);		// TWI ON
 							setTWI_Status_LED(1);
 							out_hbdaten = 1;
@@ -4896,9 +4913,7 @@ int main (void)
 						// Experiment: Controlbit loeschen, um Lesen von SR zu verhindern. Wird mit B1 wieder gesetzt
                   
                   BUS_Status &= ~(1<<TWI_CONTROLBIT);		// TWI OFF
-						
-                  
-                  
+
                   lbyte=in_lbdaten;
 						hbyte=in_hbdaten;
 						
@@ -5000,7 +5015,7 @@ int main (void)
 						
 						// Auftrag vom Webserver, die Daten im in_buffer an Adresse hb, lb ins EEPROM zu schreiben
 						
-						// Experiment: Controlbit loeschen, um Lesen von SR zu verhindern. Wird mit B1 wieder gesetzt
+						// Experiment: Controllbit loeschen, um Lesen von SR zu verhindern. Wird mit B1 wieder gesetzt
                   
                   BUS_Status &= ~(1<<TWI_CONTROLBIT);		// TWI OFF
                   
@@ -5081,7 +5096,7 @@ int main (void)
 						// Quittung senden: Daten fuer naechstes Paket von SPI laden
 						
                   // Im Moment nicht verwendet. Webserver fragt nicht nach
-                  // 180421 Webserver fragt nach
+                  // >> 180421 Webserver fragt nach
 						
 						if (eepromerfolg==0) // alles ok
 						{
@@ -5160,14 +5175,8 @@ int main (void)
 						
 #pragma mark DATATASK						
 					case DATATASK:
-						
-					//default:						// DATATASK
-               {
-                  
+               {                  
                   DataTask();
-                  
-                  // Code DATATASK
-                 
                }break; // default: DATATASK
                   
 #pragma mark  MASTERTASK
@@ -5176,11 +5185,12 @@ int main (void)
                {
                   spistatus &= ~(1<<ACTIVE_BIT);
                   lcd_gotoxy(0,0);
-                  lcd_puts("        ");
+                  lcd_puts("      ");
                   lcd_gotoxy(0,0);
                   lcd_puts("in\0");
-                  lcd_puts("Master");
-                  //DataTask();
+                  
+                  lcd_puts("MS");
+           //       DataTask();
 
                }break;
                 
