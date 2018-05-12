@@ -174,11 +174,7 @@ static char SolarString[48];
 
 #define buffer_size			8
 
-#define ERRTASK				0xA0	// Fehlertask an Webserver schicken, soll Eintrag ins Log veranlassen
-#define ERR_UHR				0xA0
-
-
-
+/*
 #define NULLTASK				0xB0	// Nichts tun
 #define STATUSTASK			0xB1	// Status des TWI aendern
 #define STATUSCONFIRMTASK	0xB2	// Statusaendern bestaetigen
@@ -194,7 +190,7 @@ static char SolarString[48];
 #define PWMREADTASK        0xBA  // PWM-Daten vom EEPROM lesen und an Zielraum schicken (synchronisierung)
 
 #define SYNCWAITTASK       0xBB // Sync im gang
-#define SYNCOKTASK         0xBC // Sync OK
+#define SYNCOKTASK         0xBD // Sync OK
 
 #define DATATASK				0xC0	// Normale Loop im Webserver
 
@@ -202,7 +198,30 @@ static char SolarString[48];
 #define MASTERTASK         0xC2 // default bei fehlendem SPI
 
 #define MASTERERRTASK		0xC7	// Fehlermeldung vom Master senden
-
+*/
+#define ERRTASK   0xA0   // Fehlertask an Webserver schicken, soll Eintrag ins Log veranlassen
+#define ERR_UHR   0xA1   // 
+#define NULLTASK   0xB0   // Nichts tun
+#define STATUSTASK   0xB1   // Status des TWI aendern
+#define STATUSCONFIRMTASK   0xB2   // Statusaenderung des TWI bestaetigen
+#define EEPROMREPORTTASK   0xB4   // Daten vom EEPROM an HomeServer senden
+#define EEPROMCONFIRMTASK   0xB5   // Quittung an HomeCentral senden
+#define EEPROMRECEIVETASK   0xB6   // Adresse fuer EEPROM-Write empfangen
+#define EEPROMWRITETASK   0xB7   // auf EEPROM schreiben    
+#define EEPROMREADTASK   0xB8   // von EEPROM lesen
+#define EEPROMSENDTASK   0xB9   // Daten vom HomeServer an HomeCentral senden
+#define EEPROMREADWOCHEATASK   0xBA   //
+#define PWMREADTASK   0xBA   // PWM-Daten vom EEPROM lesen und an Zielraum schicken (synchronisierung)        
+#define EEPROMREADWOCHEBTASK   0xBB   //         
+#define SYNCWAITTASK   0xBB   // Sync im gang        
+#define EEPROMREADPWMTASK   0xBC   // Daten fuer PWM-Array im EEPROM holen
+#define SYNCOKTASK   0xBD   // Sync OK        
+#define RESETTASK   0xBF   // HomeCentral reseten        
+#define DATATASK   0xC0   // Normale Loop im Webserver        
+#define SOLARTASK   0xC1   // Daten von solar        
+#define MASTERTASK   0xC2   // default bei fehlendem SPI        
+#define MASTERERRTASK   0xC7   // Fehlermeldung vom Master senden        
+#define RAMWRITEDAYTASK   0xD7   // Daten ins RAM schreiben, nur an einem Tag gueltig
 
 
 
@@ -1602,6 +1621,7 @@ void DataTask(void)
       }
       // Ende Synchronisation
    } // if NOT test
+   
    err_gotoxy(16,2);
    err_puthex(uhrstatus);
    err_gotoxy(18,2);
@@ -4134,6 +4154,7 @@ int main (void)
 				delay_ms(200);
 				uint8_t res=0;
 				
+            
             
 				res=rtc_write_Control(1);
 				delay_ms(10);

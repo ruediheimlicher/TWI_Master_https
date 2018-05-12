@@ -428,10 +428,11 @@ uint8_t i2c_debloc(void)
 		i--;
 		if (TWI_PIN & (1<<SDA_PIN)) // SDA ist wieder HI
 		{
-
+         i2c_stop();
 			return i;
 		}
 		
 	}
+   i2c_stop();
 	return i;
 }
