@@ -204,6 +204,7 @@ static char SolarString[48];
 #define NULLTASK   0xB0   // Nichts tun
 #define STATUSTASK   0xB1   // Status des TWI aendern
 #define STATUSCONFIRMTASK   0xB2   // Statusaenderung des TWI bestaetigen
+#define STATUSRETURNTASK   0xB3   // Status ON des TWI bestaetigen
 #define EEPROMREPORTTASK   0xB4   // Daten vom EEPROM an HomeServer senden
 #define EEPROMCONFIRMTASK   0xB5   // Quittung an HomeCentral senden
 #define EEPROMRECEIVETASK   0xB6   // Adresse fuer EEPROM-Write empfangen
@@ -216,7 +217,8 @@ static char SolarString[48];
 #define SYNCWAITTASK   0xBB   // Sync im gang        
 #define EEPROMREADPWMTASK   0xBC   // Daten fuer PWM-Array im EEPROM holen
 #define SYNCOKTASK   0xBD   // Sync OK        
-#define RESETTASK   0xBF   // HomeCentral reseten        
+#define RESETTASK   0xBF   // HomeCentral reseten     
+
 #define DATATASK   0xC0   // Normale Loop im Webserver        
 #define SOLARTASK   0xC1   // Daten von solar        
 #define MASTERTASK   0xC2   // default bei fehlendem SPI        
@@ -1412,10 +1414,12 @@ void DataTask(void)
    {
       
 #pragma mark Uhr
-      if (!((uhrstatus & (1<<SYNC_NULL)) || (uhrstatus & (1<<SYNC_WAIT))))     // Nach reset oder am start rtc noch nicht abfragen
+      if (!((uhrstatus & (1<<SYNC_NULL)) ))//(uhrstatus & (1<<SYNC_WAIT))))     // Nach reset oder am start rtc noch nicht abfragen
       {
-         
-         RTC_Aktualisieren();
+         //if ((min/30)&&(min%30==0)&&(std<23))
+         {
+            RTC_Aktualisieren();
+         }
       }
       
       
@@ -1674,9 +1678,9 @@ void DataTask(void)
       LeseStatus=0;
    }
    
-   LeseStatus |= (1<<OG2);
+   //LeseStatus |= (1<<OG2);
    //LeseStatus |= (1<<BUERO);
-   SchreibStatus |= (1<<OG2);
+   //SchreibStatus |= (1<<OG2);
    //SchreibStatus |= (1<<BUERO);
    
    
@@ -3475,7 +3479,7 @@ void DataTask(void)
                {
                   outbuffer[31] &= ~(1<<WASSERALARMESTRICH); // Alarmbit zuruecksetzen
                }
-               outbuffer[33] = out_startdaten;
+               //outbuffer[33] = out_startdaten;
                //err_gotoxy(13,0);
                //err_putc('E');
                //err_putc('+');
@@ -4150,8 +4154,14 @@ int main (void)
             i2c_init();
 				
 				delay_ms(100);
+            
+            
+            
 				rtc_init();
 				delay_ms(200);
+            
+            i2c_release();
+            delay_ms(200);
 				uint8_t res=0;
 				
             
@@ -4164,11 +4174,11 @@ int main (void)
 				
 				if (zeitres)
 				{
-					err_gotoxy(15,0);
+					err_gotoxy(16,0);
 					err_puts("Z-\0");
 				}
 				else {
-					err_gotoxy(15,0); 
+					err_gotoxy(16,0); 
 					err_puts("Z+\0");
 				}
 				
@@ -4178,18 +4188,18 @@ int main (void)
 				
 				if (datres)
 				{
-               err_gotoxy(17,0);
+               err_gotoxy(18,0);
 					err_puts("  ");
 
-					err_gotoxy(17,0);
+					err_gotoxy(18,0);
 					err_puts("D-\0");
 				}
 				else
             {
-               err_gotoxy(17,0);
+               err_gotoxy(18,0);
 					err_puts("  ");
 
-					err_gotoxy(17,0);
+					err_gotoxy(18,0);
 					err_puts("D+\0");
 				}
 				if (res + zeitres + datres == 0) // Uhr aktiviert
@@ -4422,22 +4432,23 @@ int main (void)
 				lcd_gotoxy(0,3);
 				
 				// Eingang anzeigen
-				lcd_puts("iW \0");
+				lcd_puts("iW\0");
 				lcd_puthex(in_startdaten);
-				lcd_putc(' ');
+				//lcd_putc(' ');
 				lcd_puthex(in_hbdaten);
 				lcd_puthex(in_lbdaten);
 				lcd_putc(' ');
 				uint8_t j=0;
-				for (j=0;j<2;j++)
+				for (j=0;j<5;j++)
 				{
 					//lcd_putc(' ');
-					//lcd_puthex(inbuffer[j]);
+					lcd_puthex(inbuffer[j]);
 					//err_putc(inbuffer[j]);
 				}
             //lcd_putint(outbuffer[8]);
             //lcd_putc(' ');
-            lcd_putint(SPI_Call_count0);
+            lcd_gotoxy(18,0);
+            lcd_putint1(SPI_Call_count0);
             
             lcd_gotoxy(12,2);
             lcd_putint2(inbuffer[16]);// stunde
@@ -4516,7 +4527,7 @@ int main (void)
                   //err_gotoxy(17,0);
                   //err_puts("  ");
                   
-                  err_gotoxy(15,0);
+                  err_gotoxy(18,0);
                   err_puts("D+  \0");
                }
                //lcd_putc('F');
@@ -4878,7 +4889,7 @@ int main (void)
                   
 						if (in_hbdaten == 0x01)// TWI solll wieder eingeschaltet werden
 						{
-                     out_startdaten= DATATASK;
+                     out_startdaten= STATUSRETURNTASK;
 							BUS_Status |=  (1<<TWI_CONTROLBIT);		// TWI ON
 							setTWI_Status_LED(1);
 							out_hbdaten = 1;

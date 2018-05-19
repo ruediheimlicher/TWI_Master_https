@@ -405,7 +405,26 @@ unsigned char i2c_readNak(void)
 
 }/* i2c_readNak */
 
-
+uint8_t i2c_release(void)
+{
+   uint8_t i=0x0F;
+   while (i ) 
+   {
+      // SCL-Pulse schicken, um Slave zu deblockieren
+      TWI_PORT &= ~(1<<SCL_PIN); // LO
+      delay_ms(1);
+      TWI_PORT |= (1<<SCL_PIN);   // HI
+      delay_ms(10);
+      i--;
+      if (TWI_PIN & (1<<SDA_PIN)) // SDA ist wieder HI
+      {
+         i2c_stop();
+         return i;
+      }
+      
+   }
+   return ((TWI_PIN & (1<<SDA_PIN)) > 0);
+}
 uint8_t i2c_debloc(void)
 {	
 	TWCR &= ~(1<<TWEN); //disable TWI
