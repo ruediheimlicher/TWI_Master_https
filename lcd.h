@@ -107,6 +107,8 @@ void lcd_puts(const char *s);
 void lcd_putint(uint8_t zahl);
 void lcd_putint1(uint8_t zahl);	//einstellige Zahl
 void lcd_putint2(uint8_t zahl);	//zweistellige Zahl
+void lcd_putint12(uint16_t zahl);
+void lcd_putint16(uint16_t zahl);
 void lcd_puthex(uint8_t zahl);	//Hex
 void lcd_put_zeit(uint8_t minuten, uint8_t stunden);
 void lcd_put_wochentag(uint8_t wd);

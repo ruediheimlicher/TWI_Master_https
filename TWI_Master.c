@@ -1274,6 +1274,7 @@ uint8_t RTC_Abrufen (void)
             
       }//switch wochentag
        */
+      
    }
 
    err_gotoxy(2,0);
@@ -1626,10 +1627,10 @@ void DataTask(void)
       // Ende Synchronisation
    } // if NOT test
    
-   err_gotoxy(16,2);
-   err_puthex(uhrstatus);
-   err_gotoxy(18,2);
-   err_puthex(TWI_FLAG);
+//   err_gotoxy(16,2);
+//   err_puthex(uhrstatus);
+//   err_gotoxy(18,2);
+//   err_puthex(TWI_FLAG);
    
    outbuffer[39] = TWI_FLAG;
    
@@ -1728,6 +1729,7 @@ void DataTask(void)
    if ((SchreibStatus || LeseStatus))// && (!(uhrstatus & (1<<SYNC_FIRSTRUN))))      // Uhr nicht gerade am Synchronisieren
    // && (twi_HI_count0 >= 0x02))//&&(TastaturCount==0))
    {
+      err_clr_line(2);
       TWI_FLAG = 0;
       OSZIBLO;
       BUS_Status |= (1<<SPI_SENDBIT);
@@ -1755,7 +1757,14 @@ void DataTask(void)
          min= RTCdaten[0];
          std= RTCdaten[1];
          tag= RTCdaten[2];
-         
+ 
+         Zeit.minute = RTCdaten[0];
+         Zeit.stunde = RTCdaten[1];
+         Zeit.kalendertag = RTCdaten[2];
+         Zeit.kalendermonat = RTCdaten[3];
+         Zeit.kalenderjahr = RTCdaten[4];
+         Zeit.wochentag = RTCdaten[5];   // RTC, DCF77: Montag=1; EEPROM: Montag=0
+
          
          //   Zeit vorwaertsstellen
          if ((min > Zeit.minute) || ((min ==0)&&(std==0)) || (std> Zeit.stunde) ) //neue Minute oder neue Stunde oder neuer Tag
@@ -1772,7 +1781,7 @@ void DataTask(void)
             Zeit.kalendertag = RTCdaten[2];
             Zeit.kalendermonat = RTCdaten[3];
             Zeit.kalenderjahr = RTCdaten[4];
-            Zeit.wochentag = RTCdaten[5]-1;   // RTC, DCF77: Montag=1; EEPROM: Montag=0
+            Zeit.wochentag = RTCdaten[5];   // RTC, DCF77: Montag=1; EEPROM: Montag=0
             
             // Daten fuer Sync nachfuehren
             if (!(uhrstatus & (1<<SYNC_WAIT)))
@@ -2508,32 +2517,61 @@ void DataTask(void)
              bit 0:   Lampe
              bit 1:   Ofen
              
-             
+             err_gotoxy(0,2);
+             err_puts("WZ");
+             err_putint2(Zeit.wochentag);
+             err_putint2(Zeit.stunde);
+
              */
             
             uint8_t buerostatus=0;
             delay_ms(2);
-            //err_gotoxy(8,1);
-            //err_puts("B\0");
+            err_gotoxy(0,2);
+            err_puts("B");
+            err_putint1(Zeit.wochentag);
             //err_puts("  \0"); // Codes loeschen
             PORTC |= (1<<TWICOUNTPIN);
             uint8_t BueroTagblock[buffer_size];
             uint8_t Stundencode=0;
             //err_clr_line(0);
-            //err_gotoxy(12,1);
-            //err_puts("WB:\0");
-            //err_putint1(Zeit.wochentag);
-            
+            //err_gotoxy(10,2);
+            //err_puts("B:\0");
+      /*
+       err_putint1(Zeit.wochentag);
+            err_putc(' ');
+            err_putint2(Zeit.stunde);
+            err_putc(':');
+            err_putint2(Zeit.minute);
+            err_putc(' ');
+       */
             // Buero-Tagplan lesen
             
             //err_clr_part(0,0,10);
             //err_puts("WT B rd\0");
             wdt_reset();
             uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, BueroTagblock, BUERO, 0, Zeit.wochentag);
+   //         uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, BueroTagblock, BUERO, 0, 6);
             wdt_reset();
+            
+            err_gotoxy(2,2);
+            err_puthex(erfolg);
+            err_putc(' ');
+            err_puthex(BueroTagblock[0]);
+            err_puthex(BueroTagblock[1]);
+            err_puthex(BueroTagblock[2]);
+            err_puthex(BueroTagblock[3]);
+            err_puthex(BueroTagblock[4]);
+            err_putc('*');
+            //err_puthex(BueroTagblock[5]);
+          
             if (erfolg==0)
             {
                Stundencode=Tagplanwert(BueroTagblock, Zeit.stunde);
+//               Stundencode=Tagplanwert(BueroTagblock, 0);
+              
+               err_gotoxy(16,2);
+               err_puthex(Stundencode);
+
                wdt_reset();
                
                //   BueroTXdaten[0]: Bit 0: Uhr ein   Bit 1: Uhr aus
@@ -2542,13 +2580,16 @@ void DataTask(void)
                      case 0: // erste halbe Stunde
                   {
                      BueroTXdaten[0] = (Stundencode >=2); //Werte 2, 3: ON Wert 0: OFF
-                     
+                     err_putc('a');
+                     err_putint1(BueroTXdaten[0]);
                      
                   }break;
                      
                      case 1: // zweite halbe Stunde
                   {
                      BueroTXdaten[0] = ((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: ON Wert 0: OFF
+                     err_putc('b');
+                     err_putint1(BueroTXdaten[0]);
                   }break;
                }//switch
                if (BueroTXdaten[0])
@@ -2568,12 +2609,15 @@ void DataTask(void)
                 }
                 */
                //
-               
+               BueroTXdaten[1] = Zeit.stunde;
+               BueroTXdaten[2] = Zeit.minute;
+               BueroTXdaten[3] = Stundencode;
                //err_putint1(BueroTXdaten[0]);
                //err_putc(' ');
                
                
                //   Servo
+               /*
                if ((Zeit.minute % 10) >5)
                {
                   BueroTXdaten[3]=Zeit.minute % 5;
@@ -2582,13 +2626,14 @@ void DataTask(void)
                {
                   BueroTXdaten[3]=5-Zeit.minute%5;
                }
-               
+               */
                
                
             }//erfolg
             else
             {
-               
+               err_gotoxy(16,2);
+               err_puthex(TWI_FLAG);
                //err_gotoxy(12,0);
                //err_putc('T');
                //err_clr_part(1,9,19);
@@ -2740,8 +2785,8 @@ void DataTask(void)
             outbuffer[23] = BueroRXdaten[1]; // Temp
             
             
-            lcd_gotoxy(10,0);
-            lcd_puthex(BueroRXdaten[7]);
+            //lcd_gotoxy(10,0);
+            //lcd_puthex(BueroRXdaten[7]);
             LeseStatus &= ~(1<< BUERO);
             delay_ms(100);
             PORTC &= ~(1<<TWICOUNTPIN);
@@ -2755,7 +2800,7 @@ void DataTask(void)
          if (SchreibStatus & (1<< WOZI))   //schreiben an Wozi
          {
             delay_ms(2);
-            //   err_gotoxy(12,1);
+              
             //                  err_puts("W\0");
             
             //delay_ms(2);
@@ -2773,7 +2818,7 @@ void DataTask(void)
             if (erfolg==0)
             {
                Stundencode=Tagplanwert(WoziTagblock, Zeit.stunde);
-               //outbuffer[29] |= Stundencode; // 9.4.11
+                 //outbuffer[29] |= Stundencode; // 9.4.11
                
                switch (Zeit.minute/30)
                {
@@ -2820,7 +2865,9 @@ void DataTask(void)
             if (obj1erfolg==0) // EEPROM erfolgreich gelesen
             {
                int RadiatorStundencode=Tagplanwert(tagblock1, Zeit.stunde);
-               
+ //              err_gotoxy(10,2);
+ //              err_puthex(RadiatorStundencode);
+
                RadiatorStundencode &= 0x03;   // Bit 0 und 1 filtern fuer WoZiTXdaten[1]
                WoZiTXdaten[1] = RadiatorStundencode;
                
@@ -3361,10 +3408,10 @@ void DataTask(void)
                //err_puthex(pos);
                //delay_ms(40);
                
-               err_gotoxy(0,2);
-               err_putc('T');
+ //              err_gotoxy(0,2);
+ //              err_putc('T');
                //err_puthex(OG2RXdaten[1]);
-               err_putint(OG2RXdaten[1]/2); // Innentemperatur
+ //              err_putint(OG2RXdaten[1]/2); // Innentemperatur
                //err_puthex(OG2RXdaten[2]);
                //err_puthex(OG2RXdaten[3]);
                //err_puthex(OG2RXdaten[4]);
@@ -3570,13 +3617,14 @@ void DataTask(void)
       
       
       // TWI-Fehler angeben
-      
-      err_gotoxy(8,2);
-      err_putc('T');
-      //err_clr_part(1,9,19);
-      //err_puts("wl B er\0");
-      err_puthex(TWI_FLAG);
-      
+      if (TWI_FLAG)
+      {
+         err_gotoxy(16,2);
+         err_putc('T');
+         //err_clr_part(1,9,19);
+         //err_puts("wl B er\0");
+         err_puthex(TWI_FLAG);
+      }
       err_gotoxy(0,1);
       err_puts("          \0");
       
@@ -4160,7 +4208,8 @@ int main (void)
 				rtc_init();
 				delay_ms(200);
             
-            i2c_release();
+            i2c_debloc();
+            
             delay_ms(200);
 				uint8_t res=0;
 				
@@ -4310,13 +4359,14 @@ int main (void)
 		
 		if (((startdelay==0)||(startdelay==STARTDELAY))&& (((!(PINC & (1<<SDAPIN))) && PINC & (1<<SCLPIN)) ) )// SDA ist LO UND SCL ist HI (warten auf Ack)
       {
+         /*
          err_gotoxy(0,2);
          err_puthex(startdelay);
-         err_putc(' ');
+         err_putc('+');
          err_puthex(PORTC);
-         err_putc(' ');
+         err_putc('+');
          err_puts("ERR\0");
-         
+         */
         // err_puthex(startdelay);
          //err_puthex(PORTC);
          /*
@@ -4454,7 +4504,8 @@ int main (void)
             lcd_putint2(inbuffer[16]);// stunde
             lcd_putc(':');
             lcd_putint2(inbuffer[17]);// minute
-            //lcd_putint2(inbuffer[18]);// wochentag
+             lcd_putc('-');
+            lcd_putint2(inbuffer[18]);// wochentag
             //lcd_gotoxy(0,1);
             //lcd_putc('A');
             // Start, RTC setzen mit  Zeit vom Webserver
@@ -4486,9 +4537,9 @@ int main (void)
                   //err_putc('*');
                }
                else {
-                  err_gotoxy(12,0);
+                  err_gotoxy(16,0);
                   err_puts("   ");
-                  err_gotoxy(15,0); 
+                  err_gotoxy(16,0); 
                   
                   err_puts("Z+\0");
                }
@@ -4581,7 +4632,7 @@ int main (void)
                   err_puts("OK\0");
                   err_puthex(ByteCounter);
                   
-                  
+                  /*
                   err_putc(' ');
                   err_puthex(in_startdaten);
                   err_puthex(in_enddaten);
@@ -4591,10 +4642,14 @@ int main (void)
                   err_puthex(out_enddaten);
                   err_putc(' ');
                   err_puthex(out_startdaten + in_enddaten);
-
+                  */
                   //err_gotoxy(0,2);
-                  //err_puthex(in_lbdaten);
-                  //err_puthex(in_hbdaten);
+                  err_putc(' ');
+                  err_puthex(in_lbdaten);
+                  err_puthex(in_hbdaten);
+                  err_putc(' ');
+                  err_puthex(out_lbdaten);
+                  err_puthex(out_hbdaten);
 
 						//err_gotoxy(0,1);
 						//err_puthex(loopCounterSPI++);
@@ -4854,6 +4909,10 @@ int main (void)
 				//lcd_puthex(spistatus);
 				//lcd_puthex(BUS_Status);
 				lcd_puthex(in_startdaten);
+            lcd_putc(' ');
+            lcd_puthex(in_hbdaten);
+            lcd_puthex(in_lbdaten);
+
 
 				//delay_ms(100);
             outbuffer[42] = in_startdaten;
@@ -5077,42 +5136,55 @@ int main (void)
 
 						
                   
-                  
+                      
                   uint8_t i=0;
 						for(i=0;i<8;i++)
 						{
 							EEPROMTXdaten[i]=inbuffer[i];
                      outbuffer[36+i] = inbuffer[i];
                      
-							//			err_gotoxy(3,1);
+							
 							// err_puthex(EEPROMTXdaten[i]);
 							//			err_putc(' ');
 							//delay_ms(2);
 						}
 						
 						lcd_gotoxy(0,1);
-						lcd_puts("wE \0");
+						lcd_puts("wE\0");
 						
 						lcd_puthex(in_startdaten);
 						lcd_putc(' ');
 						
 						//Empfangene Angaben vom EEPRPOM
+                  
+                  
 						lcd_puthex(in_hbdaten);
 						lcd_puthex(in_lbdaten);
+                  lcd_putc(' ');
+                  lcd_putint16(i2cStartadresse);
+                  lcd_putc('*');
+                  /*
 						lcd_putc('r');                  
                   lcd_putint2(raum);
                   lcd_putc('o');
                   lcd_putint2(objekt);
                   lcd_putc('w');
                   lcd_putint2(wochentag);
-                  
-                  
+                  */
+                  /*
                   err_gotoxy(0,2);
 						err_puthex(EEPROMTXdaten[0]);
 						err_puthex(EEPROMTXdaten[1]);
 						err_puthex(EEPROMTXdaten[2]);
+                  
 						err_puthex(EEPROMTXdaten[3]);
-						
+                  err_puthex(EEPROMTXdaten[4]);
+                  err_puthex(EEPROMTXdaten[5]);
+                   */
+                  //lcd_putc('*');
+                  //err_puthex(EEPROMTXdaten[6]);
+                  //err_puthex(EEPROMTXdaten[7]);
+
 						
 						uint8_t eepromerfolg=0;
 						
@@ -5136,8 +5208,8 @@ int main (void)
 						
 						if (eepromerfolg==0) // alles ok
 						{
-							err_gotoxy(19,1);
-							err_putc('<');
+							//err_gotoxy(19,1);
+							//err_putc('<');
 							
 							out_startdaten= EEPROMCONFIRMTASK; // B5
 							outbuffer[0]=EEPROMCONFIRMTASK;
@@ -5154,7 +5226,7 @@ int main (void)
 						{
 							// SPI senden verhindern
 							spistatus |= (1<<TWI_ERR_BIT);
-                     out_startdaten= NULLTASK; // B5
+                     out_startdaten= NULLTASK; // B0
 							outbuffer[1]=2;
 							lcd_gotoxy(19,1);
 							lcd_putc('!');
