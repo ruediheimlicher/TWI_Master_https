@@ -9,6 +9,8 @@
 
 #include "slaves.h"
 #include <avr/io.h>
+#include "defines.h"
+
 
 #define OSZIAPORT				PORTA
 #define OSZIAPORTDDR			DDRA
@@ -48,7 +50,7 @@ extern volatile uint8_t rxbuffer[buffer_size];
 extern volatile uint8_t txbuffer[buffer_size];
 //extern char* wochentagstring[];
 extern volatile uint8_t TWI_FLAG;
-extern unsigned char WOCHENPLANBREITE;
+//extern unsigned char WOCHENPLANBREITE;
 
 uint8_t SlaveSchreiben(unsigned char ADRESSE)
 {
