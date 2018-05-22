@@ -20,7 +20,7 @@ struct time
 
 uint8_t bcd2dec(uint8_t bcd);
 uint8_t dec2bcd(uint8_t dec);
-void rtc_init(void);
+uint8_t  rtc_init(void);
 uint8_t rtc_start(void);
 uint8_t rtc_stop(void);
 uint8_t rtc_writeByte(uint8_t data);

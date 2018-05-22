@@ -24,47 +24,48 @@ uint8_t dec2bcd(uint8_t dec)
   return ((((dec)/10)<<4)|((dec)%10));
 }
 
-void rtc_init()
+uint8_t rtc_init()
 {
 	//Clear CH bit of RTC
 	#define CH 7
-
+   uint8_t res=0;
 	uint8_t temp;
-	DS1307Read(0x00,&temp);
-
+	res = DS1307Read(0x00,&temp);
+   if (res)
+   {
+      return res;
+   }
 	//Clear CH Bit
 	temp&=(~(1<<CH));
 
-	DS1307Write(0x00,temp);
+	res = DS1307Write(0x00,temp);
+   if (res)
+   {
+      return res;
+   }
 	
 	//Set 12 Hour Mode
-	DS1307Read(0x02,&temp);
+	res = DS1307Read(0x02,&temp);
+   if (res)
+   {
+      return res;
+   }
 	
 	//CLEAR 12Hour BIT // BIT 6
 	temp|=(0b00000000);
 
 	//Write Back to DS1307
-	DS1307Write(0x02,temp);
+	res = DS1307Write(0x02,temp);
+   if (res)
+   {
+      return res;
+   }
 	
 	
-	
+   return 0;
 
 }
 
-/*
- while(!(TWCR & (1<<TWINT)) && whilecounter)
- {
- whilecounter--;
- }
- 
- if (whilecounter==0) // kein Erfolg
- {
- TWI_Flag=STARTERR;
- //OSZIAHI;
- return STARTERR;
- }
-
- */
 
 uint8_t rtc_start()
 {
@@ -81,7 +82,7 @@ uint8_t rtc_start()
    
    if (whilecounter==0) // kein Erfolg
    {
-      TWI_Flag=RTCSTARTERR;
+      TWI_FLAG=RTCSTARTERR;
       //OSZIAHI;
       return RTCSTARTERR;
    }
@@ -103,7 +104,7 @@ uint8_t rtc_stop()
    
    if (whilecounter==0) // kein Erfolg
    {
-      TWI_Flag=RTCSTOPERR;
+      TWI_FLAG=RTCSTOPERR;
       //OSZIAHI;
       return RTCSTOPERR;
    }
@@ -129,7 +130,7 @@ uint8_t rtc_writeByte(uint8_t data)
    
    if (whilecounter==0) // kein Erfolg
    {
-      TWI_Flag=RTCWRITEERR;
+      TWI_FLAG=RTCWRITEERR;
       //OSZIAHI;
       
       
@@ -181,7 +182,7 @@ uint8_t rtc_readByte(uint8_t *data,uint8_t ack)
    
    if (whilecounter==0) // kein Erfolg
    {
-      TWI_Flag=RTCREADERR;
+      TWI_FLAG=RTCREADERR;
       //OSZIAHI;
       return RTCREADERR;
    }

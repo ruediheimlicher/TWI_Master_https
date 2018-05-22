@@ -101,7 +101,7 @@ static volatile uint8_t pwmstatus =0;
 static volatile uint8_t Write_Err;
 static volatile uint8_t Read_Err;
 static volatile uint8_t EEPROM_Err;
-
+static volatile uint8_t TWITASK=0; // aktuelle Task mit TWI
 
 static volatile uint8_t Echo=0;
 static volatile uint8_t olderrcounter=0;
@@ -1303,9 +1303,10 @@ void RTC_Aktualisieren(void)
       err_puts("R1\0");
       //err_putc(' ');
       err_puthex(RTC_erfolg);
-      err_putc(' ');
+      //err_putc(' ');
       err_puthex(versuche);
       versuche++;
+      delay_ms(1);
    }
    
    if (RTC_erfolg)            // Fehler, aussteigen
@@ -1332,7 +1333,7 @@ void RTC_Aktualisieren(void)
        err_putc(' ');
        */
       err_gotoxy(19,0);
-      err_putc('+');
+      err_putc('*');
       
    }
 }
@@ -1441,7 +1442,8 @@ void DataTask(void)
       //sync start
       // alle 60 Min: Warten starten
       //if ((((min/30)&&(min%30==0)&&(std<23))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
- /*
+ 
+      /*
       if (((min/30)&&(min%30==0)&&(std<23)) && (!(uhrstatus & (1<<SYNC_WAIT))))
       {
          {
@@ -1459,8 +1461,9 @@ void DataTask(void)
          }
          
       }
-  */    
+  */  
       
+  /*    
       if (uhrstatus & (1<<SYNC_WAIT)) // Warten auf genuegende Anzahl korrekter Daten
       {
          TWI_FLAG = 0;
@@ -1549,13 +1552,14 @@ void DataTask(void)
          } // end DCF77erfolg=0
          if (TWI_FLAG >0)
          {
-            err_gotoxy(16,2);
+            err_gotoxy(10,2);
             err_puthex(uhrstatus);
             err_puthex(TWI_FLAG);
+            err_putc(
          }
          
       } // end (uhrstatus & (1<<SYNC_WAIT)
-      
+   */   
       // TODO: Bei fehlgeschlagener Synchronisation Uhr unverŠndert lassen. Eventuell mit ODER SYNC_READY und SYNC_NEW und SYNC_OK
       
       if (uhrstatus & (1<<SYNC_READY)) // DCF77-Uhr ist wieder bereit, RTC updaten (Zeit synchronisieren)
@@ -1618,7 +1622,7 @@ void DataTask(void)
          }
          if (TWI_FLAG > 0)
          {
-            err_gotoxy(16,2);
+            err_gotoxy(10,2);
             err_puthex(uhrstatus);
             err_puthex(TWI_FLAG);
          }
@@ -1627,7 +1631,7 @@ void DataTask(void)
       // Ende Synchronisation
    } // if NOT test
    
-//   err_gotoxy(16,2);
+//   err_gotoxy(10,2);
 //   err_puthex(uhrstatus);
 //   err_gotoxy(18,2);
 //   err_puthex(TWI_FLAG);
@@ -1720,6 +1724,7 @@ void DataTask(void)
    Write_Err=0;
    Read_Err=0;
    EEPROM_Err=0;
+   TWITASK = 0;
    
    lcd_gotoxy(12,0);
    lcd_putint2(std);
@@ -1769,7 +1774,7 @@ void DataTask(void)
          //   Zeit vorwaertsstellen
          if ((min > Zeit.minute) || ((min ==0)&&(std==0)) || (std> Zeit.stunde) ) //neue Minute oder neue Stunde oder neuer Tag
          {
-            uint8_t synchfehler=0;
+            //uint8_t synchfehler=0;
             //                  err_gotoxy(9,0);
             //                  err_puts("A\0");
             //delay_ms(200);
@@ -1790,62 +1795,14 @@ void DataTask(void)
                oldstd=RTCdaten[1];
                oldtag=RTCdaten[2];
             }
-            /*
-             Zeit.minute = DCF77daten[0];
-             Zeit.stunde = DCF77daten[1];
-             Zeit.kalendertag = DCF77daten[2];
-             Zeit.kalendermonat = DCF77daten[3];
-             Zeit.kalenderjahr = DCF77daten[4];
-             Zeit.wochentag = DCF77daten[5]-1;// DCF77 ist 1-basiert ab Sonntag
-             */
-            
-            synchfehler=DCF77daten[6];
-            //outbuffer[29]=DCF77daten[6];
-            
-            neueZeit=1; //   Zeit in RŠumen aktualisieren
+             neueZeit=1; //   Zeit in RŠumen aktualisieren
             // 29.9.08                  
             if ((Menu_Ebene & 0xF0)==0) // Oberste Ebene, AnzeigeWochentag aktualisieren
             {
                AnzeigeWochentag=Zeit.wochentag;
                
             }
-            
-            /*
-             lcd_clr_part(0,0,14);
-             if (Zeit.wochentag < 8)
-             {
-             lcd_put_wochentag(Zeit.wochentag);
-             }
-             lcd_putc(' ');
-             if (Zeit.kalendertag < 32)
-             {
-             lcd_putint2(Zeit.kalendertag);
-             }
-             lcd_putc('.');
-             if (Zeit.kalendermonat < 13)
-             {
-             lcd_putint2(Zeit.kalendermonat);
-             }
-             lcd_putc('.');
-             if (Zeit.kalenderjahr<99)
-             {
-             lcd_putint2(Zeit.kalenderjahr);
-             }
-             //lcd_gotoxy(15,1);
-             //lcd_put_zeit(Zeit.minute,Zeit.stunde);
-             */
-            
-            
-            
-            // Uhr-Fehler anzeigen
-            // err_clr_part(0,13,19);
-            // err_puts("S \0");
-            // err_putint(synchfehler);
-            
-            //err_gotoxy(14,0);
-            //err_puts("w \0");
-            //err_puthex(tempWDT_Count);
-            
+             
          } //Zeit vorwaertsstellen
          wdt_reset();
          // end Uhr lesen
@@ -1865,7 +1822,11 @@ void DataTask(void)
          if (SchreibStatus & (1<< HEIZUNG))   //schreiben an Heizung
          {
             TWI_FLAG = 0;
-            delay_ms(2);
+            TWITASK = HEIZUNG;
+            err_gotoxy(11,3);
+            err_puthex(HEIZUNG);
+            
+            delay_ms(1);
             /*
              Byte 0:   Heizungsstatus 
              
@@ -1892,7 +1853,9 @@ void DataTask(void)
             // Objekt: 0
             // Tag:Zeit.wochentag
             // xyz > uint_t16 code = Raum*100 + objekt*10 + Tag
-            
+            err_gotoxy(13,3);
+            err_puts("r1");
+
             uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock, HEIZUNG, 0, Zeit.wochentag);
             
             //OSZIAHI;
@@ -1902,9 +1865,7 @@ void DataTask(void)
             wdt_reset();
             if (erfolg==0)
             {
-               
                Stundencode=Tagplanwert(tagblock, Zeit.stunde); // Stundencode fuer aktuelle Stunde
-               
                HeizungStundencode=Tagplanwert(tagblock, Zeit.stunde);
                
                //err_gotoxy(0,1);
@@ -1926,8 +1887,6 @@ void DataTask(void)
                
                HeizungStundencode &= 0x03; // Bit 0 und 1 filtern
                //outbuffer[27] = HeizungStundencode;
-               
-               
                //err_puts(" c\0");
                //err_puthex(Stundencode);
                txbuffer[0]=0;
@@ -1968,21 +1927,18 @@ void DataTask(void)
             }//erfolg ==0
             else
             {
-               //                     err_gotoxy(1,1);
-               //                     err_puts("X\0");   //   Wochentag lesen
-               // SPI senden verhindern
+                // SPI senden verhindern
                
                spistatus |= (1<<TWI_ERR_BIT);
                EEPROM_Err |= (1<<HEIZUNG);
                
             }
-            
             // end Objekt 0
-            
             // Code fuer Objekt 1 lesen: Tag/Nacht-Mode der Heizung
-            
             uint8_t tagblock1[buffer_size];
             uint8_t Stundencode1=0;   
+            err_gotoxy(13,3);
+            err_puts("r2");
             uint8_t obj1erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock1, HEIZUNG, 1, Zeit.wochentag);
             //OSZIAHI;
             delay_ms(1);
@@ -2049,6 +2005,8 @@ void DataTask(void)
             // Code fuer Objekt 2 lesen: Dachrinnenheizung
             
             uint8_t tagblock2[buffer_size];
+            err_gotoxy(13,3);
+            err_puts("r3");
             uint8_t obj2erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock2, HEIZUNG, 2, Zeit.wochentag);
             //OSZIAHI;
             delay_ms(1);
@@ -2102,6 +2060,8 @@ void DataTask(void)
              PWM lesen
              */
             uint8_t tagblock3[buffer_size];
+            err_gotoxy(13,3);
+            err_puts("r4");
             uint8_t obj3erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock3, HEIZUNG, 3, 0);
             //OSZIAHI;
             delay_ms(1);
@@ -2141,7 +2101,8 @@ void DataTask(void)
             twi_Call_count0++;
             
             // txbuffer an Zeizung schicken
-            
+            err_gotoxy(13,3);
+            err_puts("w1");
             erfolg=SlaveSchreiben(HEIZUNG_ADRESSE);
             
             //OSZIAHI;
@@ -2174,7 +2135,7 @@ void DataTask(void)
             Write_Device &= ~(1<< HEIZUNG); // Flag zuruecksetzen
             if (TWI_FLAG >0)
             {
-               err_gotoxy(16,2);
+               err_gotoxy(10,2);
                err_puthex(HEIZUNG);
                err_puthex(TWI_FLAG);
             }
@@ -2185,11 +2146,19 @@ void DataTask(void)
          //OSZIALO;
          if (LeseStatus & (1<< HEIZUNG))   //lesen von Heizung
          {
-            delay_ms(2);
+            TWI_FLAG = 0;
+            delay_ms(1);
+            TWITASK = HEIZUNG;
+            err_gotoxy(11,3);
+            err_puthex(HEIZUNG);
+
             //                  err_gotoxy(0,1);
             //                  err_puts("H\0");
             wdt_reset();
             twi_Call_count0++;
+            err_gotoxy(13,3);
+            err_puts("r5");
+
             uint8_t Heizungerfolg=SlavedatenLesen(HEIZUNG_ADRESSE,HeizungRXdaten);
             //OSZIAHI;
             delay_ms(1);
@@ -2290,7 +2259,12 @@ void DataTask(void)
          
          if (SchreibStatus & (1<< WERKSTATT))   //schreiben an Werkstatt
          {   
-            delay_ms(2);
+            TWI_FLAG = 0;
+            delay_ms(1);
+            TWITASK = WERKSTATT;
+            err_gotoxy(11,3);
+            err_puthex(WERKSTATT);
+
             //                  err_gotoxy(4,1);
             //                  err_puts("W\0");
             /*
@@ -2308,6 +2282,8 @@ void DataTask(void)
             uint8_t erfolg=0;
             
             // Objekt 0: Lampe
+            err_gotoxy(13,3);
+            err_puts("r1");
             
             erfolg = WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, Werkstatttagblock, WERKSTATT, 0, Zeit.wochentag);
             //err_puthex(erfolg);
@@ -2357,6 +2333,9 @@ void DataTask(void)
             
             // Objekt 1: Ofen
             txbuffer[1]=0;
+            err_gotoxy(13,3);
+            err_puts("r2");
+
             erfolg = WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, Werkstatttagblock, WERKSTATT, 1, Zeit.wochentag);
             //err_puthex(erfolg);
             wdt_reset();
@@ -2393,6 +2372,9 @@ void DataTask(void)
             
             wdt_reset();
             twi_Call_count0++;
+            err_gotoxy(13,3);
+            err_puts("w1");
+
             erfolg=SlaveSchreiben(WERKSTATT_ADRESSE);
             wdt_reset();
             if (erfolg)
@@ -2412,6 +2394,9 @@ void DataTask(void)
              */
             uint8_t tagblock3[buffer_size];
             // EEPROM_WOCHENPLAN_ADRESSE, tagblock, raum, objekt, Wochentag
+            err_gotoxy(13,3);
+            err_puts("r2");
+
             uint8_t obj3erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock3, WERKSTATT, 3, 0);
             //OSZIAHI;
             delay_ms(1);
@@ -2446,16 +2431,24 @@ void DataTask(void)
          
          if (LeseStatus & (1<< WERKSTATT))   
          {
-            delay_ms(2);
+            TWI_FLAG = 0;
+            TWITASK = WERKSTATT;
+            err_gotoxy(11,3);
+            err_puthex(WERKSTATT);
+
+            delay_ms(1);
             //err_gotoxy(5,1);
             //err_puts("W\0");
             
             wdt_reset();
             twi_Call_count0++;
+            err_gotoxy(13,3);
+            err_puts("r3");
+
             uint8_t werkstatterfolg=SlavedatenLesen(WERKSTATT_ADRESSE,WerkstattRXdaten);
             wdt_reset();
             
-            err_puthex(WerkstattRXdaten[3]);
+            //err_puthex(WerkstattRXdaten[3]);
             
             if (werkstatterfolg)
             {
@@ -2523,12 +2516,16 @@ void DataTask(void)
              err_putint2(Zeit.stunde);
 
              */
-            
+            TWI_FLAG = 0;
+            TWITASK = BUERO;
+            err_gotoxy(11,3);
+            err_puthex(BUERO);
+           
             uint8_t buerostatus=0;
-            delay_ms(2);
-            err_gotoxy(0,2);
-            err_puts("B");
-            err_putint1(Zeit.wochentag);
+            delay_ms(1);
+           // err_gotoxy(0,2);
+            //err_puts("B");
+            //err_putint1(Zeit.wochentag);
             //err_puts("  \0"); // Codes loeschen
             PORTC |= (1<<TWICOUNTPIN);
             uint8_t BueroTagblock[buffer_size];
@@ -2549,10 +2546,14 @@ void DataTask(void)
             //err_clr_part(0,0,10);
             //err_puts("WT B rd\0");
             wdt_reset();
+            err_gotoxy(13,3);
+            err_puts("r1");
+
             uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, BueroTagblock, BUERO, 0, Zeit.wochentag);
    //         uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, BueroTagblock, BUERO, 0, 6);
             wdt_reset();
             
+            /*
             err_gotoxy(2,2);
             err_puthex(erfolg);
             err_putc(' ');
@@ -2563,14 +2564,14 @@ void DataTask(void)
             err_puthex(BueroTagblock[4]);
             err_putc('*');
             //err_puthex(BueroTagblock[5]);
-          
+          */
             if (erfolg==0)
             {
                Stundencode=Tagplanwert(BueroTagblock, Zeit.stunde);
 //               Stundencode=Tagplanwert(BueroTagblock, 0);
               
-               err_gotoxy(16,2);
-               err_puthex(Stundencode);
+               //err_gotoxy(10,2);
+               //err_puthex(Stundencode);
 
                wdt_reset();
                
@@ -2580,16 +2581,16 @@ void DataTask(void)
                      case 0: // erste halbe Stunde
                   {
                      BueroTXdaten[0] = (Stundencode >=2); //Werte 2, 3: ON Wert 0: OFF
-                     err_putc('a');
-                     err_putint1(BueroTXdaten[0]);
+                     //err_putc('a');
+                     //err_putint1(BueroTXdaten[0]);
                      
                   }break;
                      
                      case 1: // zweite halbe Stunde
                   {
                      BueroTXdaten[0] = ((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: ON Wert 0: OFF
-                     err_putc('b');
-                     err_putint1(BueroTXdaten[0]);
+                     //err_putc('b');
+                     //err_putint1(BueroTXdaten[0]);
                   }break;
                }//switch
                if (BueroTXdaten[0])
@@ -2632,14 +2633,8 @@ void DataTask(void)
             }//erfolg
             else
             {
-               err_gotoxy(16,2);
+               err_gotoxy(10,2);
                err_puthex(TWI_FLAG);
-               //err_gotoxy(12,0);
-               //err_putc('T');
-               //err_clr_part(1,9,19);
-               //err_puts("wl B er\0");
-               //err_puthex(TWI_FLAG);
-               //delay_ms(800);
                EEPROM_Err |= (1<<BUERO);
                spistatus |= (1<<TWI_ERR_BIT);
             }
@@ -2688,6 +2683,9 @@ void DataTask(void)
             //err_puts("Br wr\0");
             wdt_reset();
             twi_Call_count0++;
+            err_gotoxy(13,3);
+            err_puts("w1");
+
             bueroerfolg=SlavedatenSchreiben(BUERO_ADRESSE, BueroTXdaten);
             wdt_reset();
             if (bueroerfolg)
@@ -2723,7 +2721,12 @@ void DataTask(void)
          
          if (LeseStatus & (1<< BUERO))
          {
-            delay_ms(2);
+            TWITASK = BUERO;
+            err_gotoxy(11,3);
+            err_puthex(BUERO);
+
+            TWI_FLAG = 0;
+            delay_ms(1);
             //err_gotoxy(8,2);
             //err_puts("B\0");
             //err_puts("  \0");
@@ -2740,6 +2743,9 @@ void DataTask(void)
             //err_puts("Br rd\0");
             wdt_reset();
             twi_Call_count0++;
+            err_gotoxy(13,3);
+            err_puts("r2");
+
             Buerolesenerfolg=SlavedatenLesen(BUERO_ADRESSE,BueroRXdaten);
             wdt_reset();
             
@@ -2748,11 +2754,7 @@ void DataTask(void)
                //err_gotoxy(10,1);
                //err_puts("Z\0");
                
-               //err_clr_part(1,9,19);
-               //err_puts("r Br err\0");
-               //err_puthex(Buerolesenerfolg);
-               //delay_ms(800);
-               Read_Err |= (1<<BUERO);
+                Read_Err |= (1<<BUERO);
                spistatus |= (1<<TWI_ERR_BIT);
             }
             else
@@ -2799,11 +2801,16 @@ void DataTask(void)
          //   *****************
          if (SchreibStatus & (1<< WOZI))   //schreiben an Wozi
          {
-            delay_ms(2);
+            TWI_FLAG = 0;
+            TWITASK = WOZI;
+            err_gotoxy(11,3);
+            err_puthex(WOZI);
+
+            delay_ms(1);
               
             //                  err_puts("W\0");
             
-            //delay_ms(2);
+            //delay_ms(1);
             uint8_t wozistatus=0;
             uint8_t WoziTagblock[buffer_size];
             uint8_t Stundencode=0;
@@ -2813,6 +2820,9 @@ void DataTask(void)
             wdt_reset();
             
             // Lampe lesen
+            err_gotoxy(13,3);
+            err_puts("r1");
+
             uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, WoziTagblock, WOZI, 0, Zeit.wochentag);
             wdt_reset();
             if (erfolg==0)
@@ -2861,6 +2871,9 @@ void DataTask(void)
             // Code fuer Objekt 1 lesen: Radiator
             WoZiTXdaten[1] = 0;
             uint8_t tagblock1[buffer_size];
+            err_gotoxy(13,3);
+            err_puts("r2");
+
             uint8_t obj1erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock1, WOZI, 1, Zeit.wochentag);
             if (obj1erfolg==0) // EEPROM erfolgreich gelesen
             {
@@ -2885,7 +2898,9 @@ void DataTask(void)
             //end Schreiben Objekt 1
             
             uint8_t wozierfolg=0;
-            
+            err_gotoxy(13,3);
+            err_puts("w1");
+
             wozierfolg=SlavedatenSchreiben(WOZI_ADRESSE,  WoZiTXdaten);
             
             wdt_reset();
@@ -2910,9 +2925,17 @@ void DataTask(void)
          
          if (LeseStatus & (1<< WOZI))   //lesen von Wozi
          {
-            delay_ms(2);
+            TWI_FLAG = 0;
+            TWITASK = WOZI;
+            err_gotoxy(11,3);
+            err_puthex(WOZI);
+
+            delay_ms(1);
             wdt_reset();
             twi_Call_count0++;
+            err_gotoxy(13,3);
+            err_puts("r3");
+
             uint8_t wozierfolg=SlavedatenLesen(WOZI_ADRESSE, (void*)WoZiRXdaten);
             wdt_reset();
             if (wozierfolg)
@@ -2960,8 +2983,9 @@ void DataTask(void)
          {
             //                  err_gotoxy(12,1);
             //                  err_puts("L\0");
-            delay_ms(2);
-            //delay_ms(2);
+            TWI_FLAG = 0;
+            delay_ms(1);
+            //delay_ms(1);
             uint8_t laborstatus=0;
             uint8_t LaborTagblock[buffer_size];
             uint8_t Stundencode=0;
@@ -2971,7 +2995,12 @@ void DataTask(void)
             //err_clr_part(0,0,10);
             //err_puts("WT L rd\0");
             wdt_reset();
-            
+            TWITASK = LABOR;
+            err_gotoxy(11,3);
+            err_puthex(LABOR);
+            err_gotoxy(13,3);
+            err_puts("r1");
+
             uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, LaborTagblock, LABOR, 0, Zeit.wochentag);
             wdt_reset();
             if (erfolg==0)
@@ -3017,6 +3046,9 @@ void DataTask(void)
             // Radiator lesen
             LaborTXdaten[1]=0;
             wdt_reset();
+            err_gotoxy(13,3);
+            err_puts("r2");
+
             erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, LaborTagblock, LABOR, 1, Zeit.wochentag);
             wdt_reset();
             if (erfolg==0)
@@ -3044,6 +3076,9 @@ void DataTask(void)
             //err_puts("LB wr\0");
             wdt_reset();
             twi_Call_count0++;
+            err_gotoxy(13,3);
+            err_puts("w1");
+
             laborerfolg=SlavedatenSchreiben(LABOR_ADRESSE,  (void*)LaborTXdaten);
             wdt_reset();
             LaborTXdaten[4]=45;
@@ -3068,7 +3103,12 @@ void DataTask(void)
          
          if (LeseStatus & (1<< LABOR))   //lesen von Labor
          {
-            delay_ms(2);
+            TWI_FLAG = 0;
+            TWITASK = LABOR;
+            err_gotoxy(11,3);
+            err_puthex(LABOR);
+
+            delay_ms(1);
             //                  err_gotoxy(12,1);
             //                  err_puts("L\0");
             //uint8_t laborerfolg=SlaveLesen(LABOR_ADRESSE);
@@ -3076,6 +3116,9 @@ void DataTask(void)
             //err_puts("LB rd\0");
             wdt_reset();
             twi_Call_count0++;
+            err_gotoxy(13,3);
+            err_puts("r3");
+
             uint8_t laborerfolg=SlavedatenLesen(LABOR_ADRESSE, LaborRXdaten);
             wdt_reset();
             if (laborerfolg)
@@ -3136,11 +3179,16 @@ void DataTask(void)
          //   *****************
          if (SchreibStatus & (1<< OG1))   //schreiben an OG1
          {
-            delay_ms(2);
+           TWI_FLAG = 0;
+            TWITASK = OG1;
+            err_gotoxy(11,3);
+            err_puthex(OG1);
+
+            delay_ms(1);
             //   err_gotoxy(12,1);
             //                  err_puts("O\0");
             
-            //delay_ms(2);
+            //delay_ms(1);
             uint8_t OG1Tagblock[buffer_size];
             uint8_t Stundencode=0;
             OG1TXdaten[0]=0;
@@ -3153,6 +3201,9 @@ void DataTask(void)
             //err_clr_part(0,0,10);
             //err_puts("WT L rd\0");
             wdt_reset();
+            err_gotoxy(13,3);
+            err_puts("r1");
+
             uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, OG1Tagblock, OG1, 0, Zeit.wochentag);
             wdt_reset();
             if (erfolg==0)
@@ -3200,7 +3251,9 @@ void DataTask(void)
             //err_puts("LB wr\0");
             wdt_reset();
             twi_Call_count0++;
-            
+            err_gotoxy(13,3);
+            err_puts("w1");
+
             og1erfolg=SlavedatenSchreiben(OG1_ADRESSE,  OG1TXdaten);
             
             wdt_reset();
@@ -3227,7 +3280,12 @@ void DataTask(void)
          
          if (LeseStatus & (1<< OG1))   //lesen von OG1
          {
-            delay_ms(2);
+            TWI_FLAG = 0;
+            TWITASK = OG1;
+            err_gotoxy(11,3);
+            err_puthex(OG1);
+
+            delay_ms(1);
             //                  err_gotoxy(12,1);
             //                  err_puts("L\0");
             //uint8_t laborerfolg=SlaveLesen(LABOR_ADRESSE);
@@ -3235,6 +3293,9 @@ void DataTask(void)
             //err_puts("LB rd\0");
             wdt_reset();
             twi_Call_count0++;
+            err_gotoxy(13,3);
+            err_puts("r2");
+
             uint8_t og1erfolg=SlavedatenLesen(OG1_ADRESSE, OG1RXdaten);
             wdt_reset();
             if (og1erfolg)
@@ -3253,24 +3314,7 @@ void DataTask(void)
                twi_Reply_count0++;
                uint8_t pos=0x00;
                pos=(PINC & 0x30)>>4; // Bit 4, 5
-               //pos >>4;
-               //pos |= (1<<LOOPCOUNTPIN);
-               //err_gotoxy(7,1);
-               //err_puthex(pos);
-               //delay_ms(40);
-               
-               //err_gotoxy(0,1);
-               //err_putc('T');
-               //err_puthex(OG1RXdaten[0]);
-               //err_puthex(OG1RXdaten[1]);
-               //err_puthex(WoZiRXdaten[2]);
-               //err_puthex(WoZiRXdaten[3]);
-               //err_puthex(WoZiRXdaten[4]);
-               //err_puthex(WoZiRXdaten[5]);
-               //err_puthex(WoZiRXdaten[6]);
-               //err_puthex(WoZiRXdaten[7]);
-               //WebTxDaten[7]= WoZiRXdaten[1];   // Innentemperatur
-               
+                 
             }
             
             LeseStatus &= ~(1<< OG1);
@@ -3283,11 +3327,18 @@ void DataTask(void)
          if (SchreibStatus & (1<< OG2))   //schreiben an OG2
          {
             TWI_FLAG = 0;
-            delay_ms(2);
+            TWITASK = OG2;
+            err_gotoxy(11,3);
+            err_puthex(OG2);
+
+            delay_ms(1);
             uint8_t OG2Tagblock[buffer_size];
             uint8_t Stundencode=0;
             OG2TXdaten[0]=0;
             wdt_reset();
+            err_gotoxy(13,3);
+            err_puts("r1");
+
             uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, OG2Tagblock, OG2, 0, Zeit.wochentag);
             wdt_reset();
             if (erfolg==0)
@@ -3326,7 +3377,9 @@ void DataTask(void)
             uint8_t og2erfolg=0;
             wdt_reset();
             //               twi_Call_count0++;
-            
+            err_gotoxy(13,3);
+            err_puts("w1");
+
             og2erfolg=SlavedatenSchreiben(OG2_ADRESSE,  OG2TXdaten);
             
             wdt_reset();
@@ -3345,7 +3398,10 @@ void DataTask(void)
              PWM lesen
              */
             uint8_t tagblock3[buffer_size];
-            uint8_t obj3erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock3, HEIZUNG, 3, 0);
+            err_gotoxy(13,3);
+            err_puts("r2");
+
+            uint8_t obj3erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock3, OG2, 3, 0);
             //OSZIAHI;
             delay_ms(1);
             
@@ -3371,7 +3427,7 @@ void DataTask(void)
             SchreibStatus &= ~(1<< OG2);
             if (TWI_FLAG >0)
             {
-               err_gotoxy(16,2);
+               err_gotoxy(10,2);
                err_puthex(OG2 | (1<<7));
                err_puthex(TWI_FLAG);
             }
@@ -3381,9 +3437,16 @@ void DataTask(void)
          if (LeseStatus & (1<< OG2))   //lesen von OG2
          {
             TWI_FLAG = 0;
-            delay_ms(2);
+            TWITASK = OG2;
+            err_gotoxy(11,3);
+            err_puthex(OG2);
+
+            delay_ms(1);
             wdt_reset();
             twi_Call_count0++;
+            err_gotoxy(13,3);
+            err_puts("r1");
+
             uint8_t og2erfolg=SlavedatenLesen(OG2_ADRESSE, OG2RXdaten);
             wdt_reset();
             if (og2erfolg)
@@ -3402,31 +3465,14 @@ void DataTask(void)
                twi_Reply_count0++;
                uint8_t pos=0x00;
                pos=(PINC & 0x30)>>4; // Bit 4, 5
-               //pos >>4;
-               //pos |= (1<<LOOPCOUNTPIN);
-               //err_gotoxy(7,1);
-               //err_puthex(pos);
-               //delay_ms(40);
-               
- //              err_gotoxy(0,2);
- //              err_putc('T');
-               //err_puthex(OG2RXdaten[1]);
- //              err_putint(OG2RXdaten[1]/2); // Innentemperatur
-               //err_puthex(OG2RXdaten[2]);
-               //err_puthex(OG2RXdaten[3]);
-               //err_puthex(OG2RXdaten[4]);
-               //err_puthex(OG2RXdaten[5]);
-               //err_puthex(OG2RXdaten[6]);
-               //err_puthex(OG2RXdaten[7]);
-               //WebTxDaten[7]= OG2RXdaten[1];   // Innentemperatur
-               outbuffer[8] = OG2RXdaten[1];
+                 outbuffer[8] = OG2RXdaten[1];
                //err_putint(outbuffer[8]);
             }
             LeseStatus &= ~(1<< OG2);// Innentemperatur
             
             if (TWI_FLAG >0)
             {
-               err_gotoxy(16,2);
+               err_gotoxy(10,2);
                err_puthex(OG2 | (1<<6));
                err_puthex(TWI_FLAG);
             }
@@ -3439,11 +3485,19 @@ void DataTask(void)
          //   *****************
          if (SchreibStatus & (1<< ESTRICH))   //schreiben an Estrich
          {
-            delay_ms(2);
+            TWI_FLAG = 0;
+            TWITASK = ESTRICH;
+            err_gotoxy(11,3);
+            err_puthex(ESTRICH);
+
+            delay_ms(1);
             uint8_t EstrichTagblock[buffer_size];
             uint8_t Stundencode=0;
             EstrichTXdaten[0]=0;
             wdt_reset();
+            err_gotoxy(13,3);
+            err_puts("r1");
+
             uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, EstrichTagblock, ESTRICH, 0, Zeit.wochentag);
             wdt_reset();
             if (erfolg==0)
@@ -3480,6 +3534,9 @@ void DataTask(void)
             wdt_reset();
             //               twi_Call_count0++;
             twi_Call_count0++;
+            err_gotoxy(13,3);
+            err_puts("w1");
+
             estricherfolg=SlavedatenSchreiben(ESTRICH_ADRESSE,  EstrichTXdaten);
             
             wdt_reset();
@@ -3501,10 +3558,17 @@ void DataTask(void)
          
          if (LeseStatus & (1<< ESTRICH))
          {
-            
-            delay_ms(2);
+            TWI_FLAG = 0;
+            TWITASK = ESTRICH;
+            err_gotoxy(11,3);
+            err_puthex(ESTRICH);
+
+            delay_ms(1);
             wdt_reset();
             twi_Call_count0++;
+            err_gotoxy(13,3);
+            err_puts("r2");
+
             uint8_t estricherfolg=SlavedatenLesen(ESTRICH_ADRESSE, (void*)EstrichRXdaten);
             wdt_reset();
             if (estricherfolg)
@@ -3619,11 +3683,12 @@ void DataTask(void)
       // TWI-Fehler angeben
       if (TWI_FLAG)
       {
-         err_gotoxy(16,2);
+         err_gotoxy(10,2);
          err_putc('T');
          //err_clr_part(1,9,19);
          //err_puts("wl B er\0");
          err_puthex(TWI_FLAG);
+      
       }
       err_gotoxy(0,1);
       err_puts("          \0");
@@ -3969,11 +4034,6 @@ int main (void)
 	WDTCSR |= (1<<WDCE) | (1<<WDE);
 	WDTCSR = 0x00;
 	
-	// Check if the WDT was used to reset
-	//if (! (ch &  _BV(EXTRF))) // if its a not an external reset...
-	{
-		//
-	}
 	
 	//uint16_t plen;
 	int8_t cmd;
@@ -4073,20 +4133,6 @@ int main (void)
 	uint8_t twi_HI_count0=0;
 	//uint16_t twi_HO_count1=0;
 	
-	/*	
-	 // Bisherige Watchdog-Resets lesen
-	 tempWDT_Count=eeprom_read_byte(&WDT_ErrCount);;	// Bisherige Watchdog-Resets
-	 
-	 if (tempWDT_Count==0xFF) // Erster Start nach neuer programmierung, zuruecksetzen
-	 {
-	 tempWDT_Count=0;
-	 eeprom_write_byte(&WDT_ErrCount,tempWDT_Count);		// Anzahl reset
-	 delay_ms(5);
-	 }
-	 */	
-	
-	//delay_ms(300);
-	
 	
 	//Websr
 	// ******************
@@ -4162,6 +4208,8 @@ int main (void)
 	delay_ms(10);
    
    
+
+   
  //  delay_ms(10);
    sei();
 	while (1)
@@ -4176,7 +4224,7 @@ int main (void)
 			//err_gotoxy(19,1); 
 			//err_putc('+');	//	Erste Runde, + an letzter Stelle
 			//lcd_puthex(startdelay);
-			delay_ms(2);
+			delay_ms(1);
 			err_gotoxy(19,1); 
 			err_putc(' ');	//	Erste Runde, Strich an letzter Stelle weg
 			
@@ -4198,24 +4246,37 @@ int main (void)
 				err_gotoxy(0,0); 
 				err_puts("Start\0");	//	Erste Runde, Strich an letzter Stelle weg
 #pragma mark RTC init				
-				
+				//err_gotoxy(0,0); 
             i2c_init();
-				
+            //err_putc('a');
 				delay_ms(100);
             
-            
-            
-				rtc_init();
-				delay_ms(200);
-            
             i2c_debloc();
+            //err_putc('b');
+            delay_ms(200);
+            uint8_t RTC_erfolg=1;
+            uint8_t versuche=0;
+            // RTC lesen
+            while (RTC_erfolg && versuche<0x04)
+            {
+               
+               uint8_t res = rtc_init();
+               /*
+               err_gotoxy(0,2);
+               err_putc('u');
+               err_puthex(versuche);
+               err_puthex(res);
+                */
+               delay_ms(200);
+               versuche++;
+            }
+  //          
             
             delay_ms(200);
 				uint8_t res=0;
-				
-            
             
 				res=rtc_write_Control(1);
+            
 				delay_ms(10);
 				// stunde, minute, sekunde
 				uint8_t zeitres=rtc_write_Zeit(6,20,0);// uint8_t stunde, uint8_t minute, uint8_t sekunde
@@ -4223,11 +4284,11 @@ int main (void)
 				
 				if (zeitres)
 				{
-					err_gotoxy(16,0);
+					err_gotoxy(15,0);
 					err_puts("Z-\0");
 				}
 				else {
-					err_gotoxy(16,0); 
+					err_gotoxy(15,0); 
 					err_puts("Z+\0");
 				}
 				
@@ -4237,18 +4298,18 @@ int main (void)
 				
 				if (datres)
 				{
-               err_gotoxy(18,0);
+               err_gotoxy(17,0);
 					err_puts("  ");
 
-					err_gotoxy(18,0);
+					err_gotoxy(17,0);
 					err_puts("D-\0");
 				}
 				else
             {
-               err_gotoxy(18,0);
+               err_gotoxy(17,0);
 					err_puts("  ");
 
-					err_gotoxy(18,0);
+					err_gotoxy(17,0);
 					err_puts("D+\0");
 				}
 				if (res + zeitres + datres == 0) // Uhr aktiviert
@@ -4282,15 +4343,14 @@ int main (void)
       #pragma mark Standardloop start
 		
 		loopcount0++;
-		if (loopcount0 >= 0x4FFF)
+		if (loopcount0 >= 0x8FFF)
 		{
 			LOOPLEDPINPORT ^=(1<<LOOPLEDPIN); // Blink-LED
 
 			loopcount0=0;
 			loopcount1++;
-			err_gotoxy(18,3);
-			//lcd_puts("lpcnt1 \0");
-			err_puthex(loopcount1);
+			//err_gotoxy(18,2);
+			//err_puthex(loopcount1);
 			if (startdelay==0)
 			{
 				//				timer2(0xAF);
@@ -4489,7 +4549,7 @@ int main (void)
 				lcd_puthex(in_lbdaten);
 				lcd_putc(' ');
 				uint8_t j=0;
-				for (j=0;j<5;j++)
+				for (j=0;j<4;j++)
 				{
 					//lcd_putc(' ');
 					lcd_puthex(inbuffer[j]);
@@ -4537,9 +4597,9 @@ int main (void)
                   //err_putc('*');
                }
                else {
-                  err_gotoxy(16,0);
+                  err_gotoxy(15,0);
                   err_puts("   ");
-                  err_gotoxy(16,0); 
+                  err_gotoxy(15,0); 
                   
                   err_puts("Z+\0");
                }
@@ -4554,7 +4614,7 @@ int main (void)
                   //err_gotoxy(14,0);
                   //err_puts("  ");
                   
-                  err_gotoxy(15,0);
+                  err_gotoxy(14,0);
                   err_puts("D-\0");
                   err_putint1(res);
                   Zeit.wochentag = inbuffer[18];
@@ -4578,7 +4638,7 @@ int main (void)
                   //err_gotoxy(17,0);
                   //err_puts("  ");
                   
-                  err_gotoxy(18,0);
+                  err_gotoxy(17,0);
                   err_puts("D+  \0");
                }
                //lcd_putc('F');
@@ -4630,7 +4690,7 @@ int main (void)
                   
                   err_gotoxy(0,3);
                   err_puts("OK\0");
-                  err_puthex(ByteCounter);
+                  //err_puthex(ByteCounter);
                   
                   /*
                   err_putc(' ');
@@ -4644,10 +4704,10 @@ int main (void)
                   err_puthex(out_startdaten + in_enddaten);
                   */
                   //err_gotoxy(0,2);
-                  err_putc(' ');
+                  //err_putc(' ');
                   err_puthex(in_lbdaten);
                   err_puthex(in_hbdaten);
-                  err_putc(' ');
+                  //err_putc(' ');
                   err_puthex(out_lbdaten);
                   err_puthex(out_hbdaten);
 
@@ -5146,7 +5206,7 @@ int main (void)
 							
 							// err_puthex(EEPROMTXdaten[i]);
 							//			err_putc(' ');
-							//delay_ms(2);
+							//delay_ms(1);
 						}
 						
 						lcd_gotoxy(0,1);
