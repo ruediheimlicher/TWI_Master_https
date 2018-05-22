@@ -2498,302 +2498,6 @@ void DataTask(void)
             
             LeseStatus &= ~(1<< WERKSTATT);
          }
-#pragma mark Buero               
-         //   *****************
-         //   *   Buero
-         //   *****************
-         
-         if (SchreibStatus & (1<< BUERO))   //schreiben an Buero
-         {
-            /*
-             Status byte 22
-             bit 0:   Lampe
-             bit 1:   Ofen
-             
-             err_gotoxy(0,2);
-             err_puts("WZ");
-             err_putint2(Zeit.wochentag);
-             err_putint2(Zeit.stunde);
-
-             */
-            TWI_FLAG = 0;
-            TWITASK = BUERO;
-            err_gotoxy(11,3);
-            err_puthex(BUERO);
-           
-            uint8_t buerostatus=0;
-            delay_ms(1);
-           // err_gotoxy(0,2);
-            //err_puts("B");
-            //err_putint1(Zeit.wochentag);
-            //err_puts("  \0"); // Codes loeschen
-            PORTC |= (1<<TWICOUNTPIN);
-            uint8_t BueroTagblock[buffer_size];
-            uint8_t Stundencode=0;
-            //err_clr_line(0);
-            //err_gotoxy(10,2);
-            //err_puts("B:\0");
-      /*
-       err_putint1(Zeit.wochentag);
-            err_putc(' ');
-            err_putint2(Zeit.stunde);
-            err_putc(':');
-            err_putint2(Zeit.minute);
-            err_putc(' ');
-       */
-            // Buero-Tagplan lesen
-            
-            //err_clr_part(0,0,10);
-            //err_puts("WT B rd\0");
-            wdt_reset();
-            err_gotoxy(13,3);
-            err_puts("r1");
-
-            uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, BueroTagblock, BUERO, 0, Zeit.wochentag);
-   //         uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, BueroTagblock, BUERO, 0, 6);
-            wdt_reset();
-            
-            /*
-            err_gotoxy(2,2);
-            err_puthex(erfolg);
-            err_putc(' ');
-            err_puthex(BueroTagblock[0]);
-            err_puthex(BueroTagblock[1]);
-            err_puthex(BueroTagblock[2]);
-            err_puthex(BueroTagblock[3]);
-            err_puthex(BueroTagblock[4]);
-            err_putc('*');
-            //err_puthex(BueroTagblock[5]);
-          */
-            if (erfolg==0)
-            {
-               Stundencode=Tagplanwert(BueroTagblock, Zeit.stunde);
-//               Stundencode=Tagplanwert(BueroTagblock, 0);
-              
-               //err_gotoxy(10,2);
-               //err_puthex(Stundencode);
-
-               wdt_reset();
-               
-               //   BueroTXdaten[0]: Bit 0: Uhr ein   Bit 1: Uhr aus
-               switch (Zeit.minute/30)
-               {
-                     case 0: // erste halbe Stunde
-                  {
-                     BueroTXdaten[0] = (Stundencode >=2); //Werte 2, 3: ON Wert 0: OFF
-                     //err_putc('a');
-                     //err_putint1(BueroTXdaten[0]);
-                     
-                  }break;
-                     
-                     case 1: // zweite halbe Stunde
-                  {
-                     BueroTXdaten[0] = ((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: ON Wert 0: OFF
-                     //err_putc('b');
-                     //err_putint1(BueroTXdaten[0]);
-                  }break;
-               }//switch
-               if (BueroTXdaten[0])
-               {
-                  buerostatus |= (1<<0);
-               }
-               
-               // BueroTXdaten Test
-               /*
-                if (Zeit.minute&2) // Minuten ungerade
-                {
-                BueroTXdaten[0] |= (1<<0); // Bit 0 setzen
-                }
-                else
-                {
-                BueroTXdaten[0] &= ~(1<<0); // Bit 0 reseten
-                }
-                */
-               //
-               BueroTXdaten[1] = Zeit.stunde;
-               BueroTXdaten[2] = Zeit.minute;
-               BueroTXdaten[3] = Stundencode;
-               //err_putint1(BueroTXdaten[0]);
-               //err_putc(' ');
-               
-               
-               //   Servo
-               /*
-               if ((Zeit.minute % 10) >5)
-               {
-                  BueroTXdaten[3]=Zeit.minute % 5;
-               }
-               else
-               {
-                  BueroTXdaten[3]=5-Zeit.minute%5;
-               }
-               */
-               
-               
-            }//erfolg
-            else
-            {
-               err_gotoxy(10,2);
-               err_puthex(TWI_FLAG);
-               EEPROM_Err |= (1<<BUERO);
-               spistatus |= (1<<TWI_ERR_BIT);
-            }
-            
-            uint8_t pos=0x00;
-            pos=(PINB & 0x03)>>4; // Bit 0, 1
-            //pos >>4;
-            //pos |= (1<<LOOPCOUNTPIN);
-            //pos |= (1<<TWICOUNTPIN);
-            
-            pos=Zeit.minute%5;
-            //               err_gotoxy(12,1);
-            //               err_puthex(pos);
-            BueroTXdaten[3]=pos;
-            //delay_ms(40);
-            /*
-             switch (pos)
-             {
-             case 0:
-             BueroTXdaten[3]=20;
-             break;
-             
-             case 1:
-             BueroTXdaten[3]=30;
-             break;
-             
-             case 2:
-             BueroTXdaten[3]=40;
-             break;
-             
-             case 3:
-             BueroTXdaten[3]=50;
-             break;
-             
-             default:
-             BueroTXdaten[3]=60;
-             }//switch pos
-             */
-            
-            //               err_putc(' ');
-            //               err_putint2(BueroTXdaten[3]);
-            
-            uint8_t bueroerfolg=0;
-            
-            //err_clr_part(0,0,10);
-            //err_puts("Br wr\0");
-            wdt_reset();
-            twi_Call_count0++;
-            err_gotoxy(13,3);
-            err_puts("w1");
-
-            bueroerfolg=SlavedatenSchreiben(BUERO_ADRESSE, BueroTXdaten);
-            wdt_reset();
-            if (bueroerfolg)
-            {
-               
-               //err_gotoxy(10,1);
-               //err_puts("Y\0");
-               //err_clr_part(1,9,19);
-               //err_puts("w Br err\0");
-               //err_puthex(bueroerfolg);
-               //delay_ms(80);
-               Write_Err |= (1<<BUERO);
-               spistatus |= (1<<TWI_ERR_BIT);
-            }
-            else
-            {
-               twi_Reply_count0++;
-            }
-            //               err_gotoxy(12,1);
-            //               err_puts("WB\0");
-            //err_gotoxy(12,0);
-            //               err_puthex(bueroerfolg);
-            
-            SchreibStatus &= ~(1<< BUERO);
-            delay_ms(100);
-            PORTC &= ~(1<<TWICOUNTPIN);
-            outbuffer[22] = buerostatus;
-         }
-         
-         
-         //lesen von Buero
-         
-         
-         if (LeseStatus & (1<< BUERO))
-         {
-            TWITASK = BUERO;
-            err_gotoxy(11,3);
-            err_puthex(BUERO);
-
-            TWI_FLAG = 0;
-            delay_ms(1);
-            //err_gotoxy(8,2);
-            //err_puts("B\0");
-            //err_puts("  \0");
-            PORTC |= (1<<TWICOUNTPIN);
-            
-            //err_clr_line(1);
-            //lcd_gotoxy(12,3);
-            //err_puts("RB:\0");
-            //delay_ms(50);
-            //uint8_t BuerolesenDaten[buffer_size];
-            uint8_t Buerolesenerfolg=0;
-            
-            //err_clr_part(0,0,10);
-            //err_puts("Br rd\0");
-            wdt_reset();
-            twi_Call_count0++;
-            err_gotoxy(13,3);
-            err_puts("r2");
-
-            Buerolesenerfolg=SlavedatenLesen(BUERO_ADRESSE,BueroRXdaten);
-            wdt_reset();
-            
-            if (Buerolesenerfolg)
-            {
-               //err_gotoxy(10,1);
-               //err_puts("Z\0");
-               
-                Read_Err |= (1<<BUERO);
-               spistatus |= (1<<TWI_ERR_BIT);
-            }
-            else
-            {
-               twi_Reply_count0++;
-            }
-            
-            /*
-             // for (i=0;i<8;i++)
-             {
-             i=1;
-             err_gotoxy(13,0);
-             err_putint1(i);
-             err_putc(' ');
-             err_puthex(Buerodaten[i]);
-             delay_ms(600);
-             
-             }
-             */
-            
-            //err_clr_line(0);
-            //err_puts("R B:\0");
-            //err_puthex(BueroRXdaten[0]);
-            //            err_puthex(BueroRXdaten[1]);
-            //            err_puthex(BueroRXdaten[2]);
-            //            err_puthex(BueroRXdaten[3]);
-            //delay_ms(400);
-            //err_puthex(LeseStatus);
-            
-            outbuffer[23] = BueroRXdaten[1]; // Temp
-            
-            
-            //lcd_gotoxy(10,0);
-            //lcd_puthex(BueroRXdaten[7]);
-            LeseStatus &= ~(1<< BUERO);
-            delay_ms(100);
-            PORTC &= ~(1<<TWICOUNTPIN);
-            
-         }
          
 #pragma mark Wozi               
          //   *****************
@@ -2974,6 +2678,306 @@ void DataTask(void)
             
             LeseStatus &= ~(1<< WOZI);
          }
+         
+// start BUERO         
+#pragma mark Buero               
+         //   *****************
+         //   *   Buero
+         //   *****************
+         
+         if (SchreibStatus & (1<< BUERO))   //schreiben an Buero
+         {
+            /*
+             Status byte 22
+             bit 0:   Lampe
+             bit 1:   Ofen
+             
+             err_gotoxy(0,2);
+             err_puts("WZ");
+             err_putint2(Zeit.wochentag);
+             err_putint2(Zeit.stunde);
+             
+             */
+            TWI_FLAG = 0;
+            TWITASK = BUERO;
+            err_gotoxy(11,3);
+            err_puthex(BUERO);
+            
+            uint8_t buerostatus=0;
+            delay_ms(1);
+            // err_gotoxy(0,2);
+            //err_puts("B");
+            //err_putint1(Zeit.wochentag);
+            //err_puts("  \0"); // Codes loeschen
+            PORTC |= (1<<TWICOUNTPIN);
+            uint8_t BueroTagblock[buffer_size];
+            uint8_t Stundencode=0;
+            //err_clr_line(0);
+            //err_gotoxy(10,2);
+            //err_puts("B:\0");
+            /*
+             err_putint1(Zeit.wochentag);
+             err_putc(' ');
+             err_putint2(Zeit.stunde);
+             err_putc(':');
+             err_putint2(Zeit.minute);
+             err_putc(' ');
+             */
+            // Buero-Tagplan lesen
+            
+            //err_clr_part(0,0,10);
+            //err_puts("WT B rd\0");
+            wdt_reset();
+            err_gotoxy(13,3);
+            err_puts("r1");
+            
+            uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, BueroTagblock, BUERO, 0, Zeit.wochentag);
+            //         uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, BueroTagblock, BUERO, 0, 6);
+            wdt_reset();
+            
+            /*
+             err_gotoxy(2,2);
+             err_puthex(erfolg);
+             err_putc(' ');
+             err_puthex(BueroTagblock[0]);
+             err_puthex(BueroTagblock[1]);
+             err_puthex(BueroTagblock[2]);
+             err_puthex(BueroTagblock[3]);
+             err_puthex(BueroTagblock[4]);
+             err_putc('*');
+             //err_puthex(BueroTagblock[5]);
+             */
+            if (erfolg==0)
+            {
+               Stundencode=Tagplanwert(BueroTagblock, Zeit.stunde);
+               //               Stundencode=Tagplanwert(BueroTagblock, 0);
+               
+               //err_gotoxy(10,2);
+               //err_puthex(Stundencode);
+               
+               wdt_reset();
+               
+               //   BueroTXdaten[0]: Bit 0: Uhr ein   Bit 1: Uhr aus
+               switch (Zeit.minute/30)
+               {
+                  case 0: // erste halbe Stunde
+                  {
+                     BueroTXdaten[0] = (Stundencode >=2); //Werte 2, 3: ON Wert 0: OFF
+                     //err_putc('a');
+                     //err_putint1(BueroTXdaten[0]);
+                     
+                  }break;
+                  
+                  case 1: // zweite halbe Stunde
+                  {
+                     BueroTXdaten[0] = ((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: ON Wert 0: OFF
+                     //err_putc('b');
+                     //err_putint1(BueroTXdaten[0]);
+                  }break;
+               }//switch
+               if (BueroTXdaten[0])
+               {
+                  buerostatus |= (1<<0);
+               }
+               
+               // BueroTXdaten Test
+               /*
+                if (Zeit.minute&2) // Minuten ungerade
+                {
+                BueroTXdaten[0] |= (1<<0); // Bit 0 setzen
+                }
+                else
+                {
+                BueroTXdaten[0] &= ~(1<<0); // Bit 0 reseten
+                }
+                */
+               //
+               BueroTXdaten[1] = Zeit.stunde;
+               BueroTXdaten[2] = Zeit.minute;
+               BueroTXdaten[3] = Stundencode;
+               //err_putint1(BueroTXdaten[0]);
+               //err_putc(' ');
+               
+               
+               //   Servo
+               /*
+                if ((Zeit.minute % 10) >5)
+                {
+                BueroTXdaten[3]=Zeit.minute % 5;
+                }
+                else
+                {
+                BueroTXdaten[3]=5-Zeit.minute%5;
+                }
+                */
+               
+               
+            }//erfolg
+            else
+            {
+               err_gotoxy(10,2);
+               err_puthex(TWI_FLAG);
+               EEPROM_Err |= (1<<BUERO);
+               spistatus |= (1<<TWI_ERR_BIT);
+            }
+            
+            uint8_t pos=0x00;
+            pos=(PINB & 0x03)>>4; // Bit 0, 1
+            //pos >>4;
+            //pos |= (1<<LOOPCOUNTPIN);
+            //pos |= (1<<TWICOUNTPIN);
+            
+            pos=Zeit.minute%5;
+            //               err_gotoxy(12,1);
+            //               err_puthex(pos);
+            BueroTXdaten[3]=pos;
+            //delay_ms(40);
+            /*
+             switch (pos)
+             {
+             case 0:
+             BueroTXdaten[3]=20;
+             break;
+             
+             case 1:
+             BueroTXdaten[3]=30;
+             break;
+             
+             case 2:
+             BueroTXdaten[3]=40;
+             break;
+             
+             case 3:
+             BueroTXdaten[3]=50;
+             break;
+             
+             default:
+             BueroTXdaten[3]=60;
+             }//switch pos
+             */
+            
+            //               err_putc(' ');
+            //               err_putint2(BueroTXdaten[3]);
+            
+            uint8_t bueroerfolg=0;
+            
+            //err_clr_part(0,0,10);
+            //err_puts("Br wr\0");
+            wdt_reset();
+            twi_Call_count0++;
+            err_gotoxy(13,3);
+            err_puts("w1");
+            
+            bueroerfolg=SlavedatenSchreiben(BUERO_ADRESSE, BueroTXdaten);
+            wdt_reset();
+            if (bueroerfolg)
+            {
+               
+               //err_gotoxy(10,1);
+               //err_puts("Y\0");
+               //err_clr_part(1,9,19);
+               //err_puts("w Br err\0");
+               //err_puthex(bueroerfolg);
+               //delay_ms(80);
+               Write_Err |= (1<<BUERO);
+               spistatus |= (1<<TWI_ERR_BIT);
+            }
+            else
+            {
+               twi_Reply_count0++;
+            }
+            //               err_gotoxy(12,1);
+            //               err_puts("WB\0");
+            //err_gotoxy(12,0);
+            //               err_puthex(bueroerfolg);
+            
+            SchreibStatus &= ~(1<< BUERO);
+            delay_ms(100);
+            PORTC &= ~(1<<TWICOUNTPIN);
+            outbuffer[22] = buerostatus;
+         }
+         
+         
+         //lesen von Buero
+         
+         
+         if (LeseStatus & (1<< BUERO))
+         {
+            TWITASK = BUERO;
+            err_gotoxy(11,3);
+            err_puthex(BUERO);
+            
+            TWI_FLAG = 0;
+            delay_ms(1);
+            //err_gotoxy(8,2);
+            //err_puts("B\0");
+            //err_puts("  \0");
+            PORTC |= (1<<TWICOUNTPIN);
+            
+            //err_clr_line(1);
+            //lcd_gotoxy(12,3);
+            //err_puts("RB:\0");
+            //delay_ms(50);
+            //uint8_t BuerolesenDaten[buffer_size];
+            uint8_t Buerolesenerfolg=0;
+            
+            //err_clr_part(0,0,10);
+            //err_puts("Br rd\0");
+            wdt_reset();
+            twi_Call_count0++;
+            err_gotoxy(13,3);
+            err_puts("r2");
+            
+            Buerolesenerfolg=SlavedatenLesen(BUERO_ADRESSE,BueroRXdaten);
+            wdt_reset();
+            
+            if (Buerolesenerfolg)
+            {
+               //err_gotoxy(10,1);
+               //err_puts("Z\0");
+               
+               Read_Err |= (1<<BUERO);
+               spistatus |= (1<<TWI_ERR_BIT);
+            }
+            else
+            {
+               twi_Reply_count0++;
+            }
+            
+            /*
+             // for (i=0;i<8;i++)
+             {
+             i=1;
+             err_gotoxy(13,0);
+             err_putint1(i);
+             err_putc(' ');
+             err_puthex(Buerodaten[i]);
+             delay_ms(600);
+             
+             }
+             */
+            
+            //err_clr_line(0);
+            //err_puts("R B:\0");
+            //err_puthex(BueroRXdaten[0]);
+            //            err_puthex(BueroRXdaten[1]);
+            //            err_puthex(BueroRXdaten[2]);
+            //            err_puthex(BueroRXdaten[3]);
+            //delay_ms(400);
+            //err_puthex(LeseStatus);
+            
+            outbuffer[23] = BueroRXdaten[1]; // Temp
+            
+            
+            //lcd_gotoxy(10,0);
+            //lcd_puthex(BueroRXdaten[7]);
+            LeseStatus &= ~(1<< BUERO);
+            delay_ms(100);
+            PORTC &= ~(1<<TWICOUNTPIN);
+            
+         }
+         // end BUERO
+         
          
 #pragma mark Labor               
          //   *****************
