@@ -4261,16 +4261,17 @@ int main (void)
             uint8_t RTC_erfolg=1;
             uint8_t versuche=0;
             // RTC lesen
+            
             while (RTC_erfolg && versuche<0x04)
             {
                
                uint8_t res = rtc_init();
-               /*
+               
                err_gotoxy(0,2);
                err_putc('u');
                err_puthex(versuche);
                err_puthex(res);
-                */
+                
                delay_ms(200);
                versuche++;
             }
