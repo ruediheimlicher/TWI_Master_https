@@ -155,11 +155,11 @@ volatile uint8_t      TWI_FLAG=0;
 // volatile uint8_t     daySettingArray[8][8][8][8] = {{{{0}}}}; // 1 Zeile pro raum, 8 Zeilen fuer tag, 4 Zeilen fuer objekt, 6 bytes Data 
 
 // neue Version
-volatile uint8_t     daySettingArray[8][16] = {{0}}; // 1 Zeile pro paket, 16 bytes Data 
+volatile uint8_t     daySettingArray[16][16] = {{0}}; // 1 Zeile pro paket, 16 bytes Data 
 /*
  byte0:  
  */
-
+volatile uint8_t                        permanent;
 void daySettingSchreiben(uint8_t wochentag, uint8_t raum, uint8_t data[]);
 
 uint8_t daySettingLesen(uint8_t wochentag, uint8_t raum, uint8_t data[]);

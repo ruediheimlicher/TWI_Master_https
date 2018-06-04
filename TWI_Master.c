@@ -2616,9 +2616,9 @@ void DataTask(void)
                Stundencode=Tagplanwert(BueroTagblock, Zeit.stunde);
                //               Stundencode=Tagplanwert(BueroTagblock, 0);
                
-               //err_gotoxy(10,2);
-               //err_puthex(Stundencode);
-               
+               err_gotoxy(15,3);
+               err_puthex(Stundencode);
+               err_putint1(Zeit.minute/30);
                wdt_reset();
                
                //   BueroTXdaten[0]: Bit 0: Uhr ein   Bit 1: Uhr aus
@@ -2627,16 +2627,16 @@ void DataTask(void)
                   case 0: // erste halbe Stunde
                   {
                      BueroTXdaten[0] = (Stundencode >=2); //Werte 2, 3: ON Wert 0: OFF
-                     //err_putc('a');
-                     //err_putint1(BueroTXdaten[0]);
+                     err_putc('a');
+                     err_putint1(BueroTXdaten[0]);
                      
                   }break;
                   
                   case 1: // zweite halbe Stunde
                   {
                      BueroTXdaten[0] = ((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: ON Wert 0: OFF
-                     //err_putc('b');
-                     //err_putint1(BueroTXdaten[0]);
+                     err_putc('b');
+                     err_putint1(BueroTXdaten[0]);
                   }break;
                }//switch
                if (BueroTXdaten[0])
@@ -4063,7 +4063,7 @@ int main (void)
    // Werte default
    min = 20; // sync soll bald anfangen
    std = 12;
-
+   //i2c_debloc();
     /******************************************************************/
 
 	/*** Hauptschleife															***/
@@ -4075,7 +4075,8 @@ int main (void)
 	lcd_puts("Los!\0");
 	delay_ms(10);
    
-   
+   i2c_init();
+
 
    
  //  delay_ms(10);
@@ -4104,10 +4105,7 @@ int main (void)
 		{
 			if (startdelay==1) // Letzter Durchlauf vor einschalten
 			{
-				DDRC &= ~(1<<DDC1);	//Pin 1 von PORT C als Eingang fuer TWI SDA
-				PORTC |= (1<<DDC1); //Pull-up
-				DDRC &= ~(1<<DDC0);	//Pin 0 von PORT C als Eingang fuer TWI SCL
-				PORTC |= (1<<DDC0); //Pull-up
+            
 				BUS_Status |=(1<<TWI_CONTROLBIT);		// TWI ON
 				BUS_Status &=~(1<<WEB_CONTROLBIT);		// WEB OFF
 				lcd_clr_line(0);
@@ -4115,11 +4113,13 @@ int main (void)
 				err_puts("Start\0");	//	Erste Runde, Strich an letzter Stelle weg
 #pragma mark RTC init				
 				//err_gotoxy(0,0); 
-            i2c_init();
-            //err_putc('a');
-				delay_ms(100);
             
-            i2c_debloc();
+            i2c_init();
+            
+            //err_putc('a');
+				delay_ms(500);
+            
+//            i2c_debloc();
             //err_putc('b');
             delay_ms(200);
             uint8_t RTC_erfolg=1;
@@ -4129,12 +4129,12 @@ int main (void)
             {
                
                uint8_t res = rtc_init();
-               /*
+               
                err_gotoxy(0,2);
                err_putc('u');
                err_puthex(versuche);
                err_puthex(res);
-                */
+               
                delay_ms(200);
                versuche++;
             }
@@ -4202,7 +4202,7 @@ int main (void)
 			
 			
 		}
-		else
+//		else
 		{
 			//err_gotoxy(10,1); 
 			//err_puthex(startdelay);
@@ -4446,8 +4446,11 @@ int main (void)
                uint8_t res = 0;
                res=rtc_write_Control(1);
                delay_ms(30);
-               
-               
+               if (res)
+               {
+                  err_gotoxy(10,0);
+                  err_puts("C-");
+               }
                //lcd_putc('B');
                // Zeit setzen: stunde, minute, sekunde
                res=rtc_write_Zeit(inbuffer[16],inbuffer[17],0);// uint8_t stunde, uint8_t minute, uint8_t sekunde
@@ -4547,6 +4550,7 @@ int main (void)
                spistatus |= (1<<SPI_SHIFT_IN_OK_BIT);
 					if (out_startdaten + in_enddaten==0xFF) // alles OK
 					{
+                  permanent = inbuffer[8];
                   err_gotoxy(19,0);
 						err_putc('+');
 						spistatus |= (1<<SUCCESS_BIT); // Bit fuer vollstaendige und korrekte  Uebertragung setzen
@@ -4683,12 +4687,13 @@ int main (void)
             
 				 lcd_putc(' ');
 				 //lcd_putc('l');
-				 lcd_puthex(in_lbdaten);
+				 lcd_puthex(in_hbdaten);
 				 //lcd_putc(' ');
 				 //lcd_putc('h');
-				 lcd_puthex(in_hbdaten);
+				 lcd_puthex(in_lbdaten);
 				 //out_hbdaten++;
 				 //out_lbdaten--;
+            lcd_puthex(permanent);
 				 
 				 
 				 
@@ -5076,7 +5081,13 @@ int main (void)
 							//			err_putc(' ');
 							//delay_ms(1);
 						}
-						
+                  
+						permanent = inbuffer[8];
+                  uint8_t eepromerfolg=0;
+                  // Identifikation im heutearray:
+                  uint16_t dataindex = 56*raum + 7*objekt + wochentag;
+                  
+                  {
 						lcd_gotoxy(0,1);
 						lcd_puts("wE\0");
 						
@@ -5114,7 +5125,7 @@ int main (void)
                   //err_puthex(EEPROMTXdaten[7]);
 
 						
-						uint8_t eepromerfolg=0;
+						
 						
 						// EEPROMTXdaten: Array mit den Daten fuer das EEPROM, vom Webserver 
 						// hbyte, lbyte: Adresse im EEPROM, geschickt vom Webserver						
@@ -5126,6 +5137,7 @@ int main (void)
 						//err_puthex(eepromerfolg);
 						
 						// erledigt
+                  }
 						
 						EEPROMTXStartdaten=0;
 						

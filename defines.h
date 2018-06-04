@@ -157,7 +157,7 @@
 #define TASTE0 235
 #define TASTER 245
 
-#define STARTDELAY 0x0F
+#define STARTDELAY 0xAFFF
 
 //#define WOCHENPLANBREITE 0x40
 

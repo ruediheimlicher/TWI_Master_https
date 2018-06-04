@@ -1,5 +1,5 @@
 
-cd /Users/ruediheimlicher/Documents/Elektronik/\ AVR/\ AVR_Programme/AVR\ HomeCentral/Master/TWI_Master_C_git/TWI_Master_C_5
+cd /Users/ruediheimlicher/Documents/Elektronik/\ AVR/\ AVR_Programme/AVR\ HomeCentral/Master/TWI_Master_212
 avr-size -C --mcu=atmega644p TWI_Master.elf
 
 171223 

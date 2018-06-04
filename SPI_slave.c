@@ -85,6 +85,7 @@ volatile uint8_t								in_enddaten;
 volatile uint8_t								in_hbdaten;
 volatile uint8_t								in_lbdaten;
 
+
 volatile uint8_t								complement=0;		//Zweiercomplement
 
 
@@ -251,257 +252,244 @@ void InitSPI_Slave(void)
 
 ISR( INT0_vect )
 {
-	
-	if (spistatus & (1<<ACTIVE_BIT))									// CS ist LO, Interrupt ist OK
-	{
-																				
-			_delay_us(10);																	// PIN lesen:
-		
-		if (spistatus & (1<<STARTDATEN_BIT))						// out_startdaten senden, in_startdaten laden
-		{
-		
-			if (SPI_CONTROL_PORTPIN & (1<<SPI_CONTROL_MOSI))	// bit ist HI
-			{
-				in_startdaten |= (1<<(7-bitpos));
-
-				// Echo laden
-				//SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
-			}
-			else																// bit ist LO
-			{
-				in_startdaten |= (0<<(7-bitpos));
-				
-				// Echo laden
-				//SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
-			}
-			
-			
-			// Output laden
-			if (out_startdaten & (1<<(7-bitpos)))
-			{
-				SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
-			}
-			else 
-			{
-				SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
-			}
-			
-			
-			bitpos++;
-
-
-			if (bitpos>=8) // Byte fertig
-			{
-				complement=	~in_startdaten;		// Zweiercomplement aus Startdaten bestimmen fuer Enddaten
-
-				spistatus &= ~(1<<STARTDATEN_BIT);					// Bit fuer Startdaten zuruecksetzen
-				spistatus |= (1<<LB_BIT);								// Bit fuer lb setzen
-
-				bitpos=0;
-				
-			}
-			
-		}
-		
-		
-		//	LB
-		else if (spistatus & (1<<LB_BIT))					// out_lbdaten senden, in_lbdaten laden
-		{
-			
-			if (SPI_CONTROL_PORTPIN & (1<<SPI_CONTROL_MOSI))	// bit ist HI
-			{
-				in_lbdaten |= (1<<(7-bitpos));
-				
-				// Echo laden
-				//SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
-			}
-			else																// bit ist LO
-			{
-				in_lbdaten |= (0<<(7-bitpos));
-				
-				// Echo laden
-				//SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
-			}
-			
-			
-			// Output laden
-			if (out_lbdaten & (1<<(7-bitpos)))						// bit ist HI
-			{
-				SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
-			}
-			else																// bit ist LO
-			{
-				SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
-			}
-			
-			bitpos++;
-			
-			
-			if (bitpos>=8)	// Byte fertig
-			{
-				spistatus &= ~(1<<LB_BIT);						// Bit fuer lb zuruecksetzen
-				spistatus |= (1<<HB_BIT);						// Bit fuer hb setzen
-				bitpos=0;
-			}
-			
-		}		
-		//LB end
-	
-		//	HB
-		else if (spistatus & (1<<HB_BIT))					// out_hbdaten senden, in_hbdaten laden
-		{
-			
-			if (SPI_CONTROL_PORTPIN & (1<<SPI_CONTROL_MOSI))	// bit ist HI
-			{
-				in_hbdaten |= (1<<(7-bitpos));
-				
-				// Echo laden
-				//SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
-			}
-			else																// bit ist LO
-			{
-				in_hbdaten |= (0<<(7-bitpos));
-				
-				// Echo laden
-				//SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
-			}
-			
-			
-			// Output laden
-			if (out_hbdaten & (1<<(7-bitpos)))						// bit ist HI
-			{
-				SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
-			}
-			else																// bit ist LO
-			{
-				SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
-			}
-			
-			bitpos++;
-			
-			if (bitpos>=8)	// Byte fertig
-			{
-				spistatus &= ~(1<<HB_BIT);						// Bit fuer hb zuruecksetzen
-				
-				bitpos=0;
-			}
-			
-		}
-		//HB end
-
-
-		
-		
-		else if (spistatus & (1<<ENDDATEN_BIT))					// out_enddaten senden, in_enddaten laden
-		{
-			
-			if (SPI_CONTROL_PORTPIN & (1<<SPI_CONTROL_MOSI))	// bit ist HI
-			{
-				in_enddaten |= (1<<(7-bitpos));
-				
-				// Echo laden
-				//SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
-			}
-			else																// bit ist LO
-			{
-				in_enddaten |= (0<<(7-bitpos));
-				
-				// Echo laden
-				//SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
-			}
-			
-			
-			// Output laden
-//			if (out_enddaten & (1<<(7-bitpos)))						// bit ist HI
-			if (complement & (1<<(7-bitpos)))						// bit ist HI
-			{
-				SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
-			}
-			else																// bit ist LO
-			{
-				SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
-			}
-			
-			
-			bitpos++;
-			
-			
-			if (bitpos>=8)	// Byte fertig
-			{
-				spistatus &= ~(1<<ENDDATEN_BIT);						// Bit fuer Enddaten zuruecksetzen
-				bitpos=0;
-				if (out_startdaten + in_enddaten==0xFF)
-				{
-					//lcd_putc('+');
-					//spistatus |= (1<<SUCCESS_BIT);					// Datenserie korrekt geladen
-					
-				}
-				else 
-				{
-					//lcd_putc('-');
-					//spistatus &= ~(1<<SUCCESS_BIT);					// Datenserie nicht korrekt geladen
-					errCounter++;
-				}
-				// 24.6.2010
-//				out_startdaten=0xC0; ergab nicht korrekte Pruefsumme mit in_enddaten
-
-//18.7.10
-//				out_hbdaten=0;
-//				out_lbdaten=0;
-				
-			}
-			
-		}
-		
-		else			// Datenarray in inbuffer laden, Daten von outbuffer senden
-		
-		{
-			if (SPI_CONTROL_PORTPIN & (1<<SPI_CONTROL_MOSI))	// bit ist HI
-			{
-				
-				inbuffer[ByteCounter] |= (1<<(7-bitpos));
-				
-				// Echo laden
-				//SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
-			}
-			else																// bit ist LO
-			{
-				inbuffer[ByteCounter] |= (0<<(7-bitpos));
-				
-				// Echo laden
-				//SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
-			}
-			
-			
-			// Output laden
-			if (outbuffer[ByteCounter] & (1<<(7-bitpos)))		// bit ist HI
-			{
-				SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
-			}
-			else																// bit ist LO
-			{
-				SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
-			}
-			
-			
-			bitpos++;
-			
-			if (bitpos>=8) // Byte fertig
-			{
-				if (ByteCounter<SPI_BUFSIZE -1 )						// zweitletztes Byte
-				{
-					ByteCounter++;
-				}
-				else 
-				{
-					spistatus |= (1<<ENDDATEN_BIT);					// Bit fuer Enddaten setzen
-				}
-				bitpos=0;
-			}	// if bitpos
-		}						//  Datenarray in inbuffer laden, Daten von outbuffer senden
-	}						// if (spistatus & (1<<ACTIVE_BIT))
-	
-}		// ISR
+   
+   if (spistatus & (1<<ACTIVE_BIT))                           // CS ist LO, Interrupt ist OK
+   {
+      
+      _delay_us(10);                                                   // PIN lesen:
+      
+      if (spistatus & (1<<STARTDATEN_BIT))                  // out_startdaten senden, in_startdaten laden
+      {
+         
+         if (SPI_CONTROL_PORTPIN & (1<<SPI_CONTROL_MOSI))   // bit ist HI
+         {
+            in_startdaten |= (1<<(7-bitpos));
+            // Echo laden
+            //SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
+         }
+         else                                                // bit ist LO
+         {
+            in_startdaten |= (0<<(7-bitpos));
+            
+            // Echo laden
+            //SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
+         }
+         
+         
+         // Output laden
+         if (out_startdaten & (1<<(7-bitpos)))
+         {
+            SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
+         }
+         else 
+         {
+            SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
+         }
+         
+         
+         bitpos++;
+         
+         if (bitpos>=8) // Byte fertig
+         {
+            complement=   ~in_startdaten;      // Zweiercomplement aus Startdaten bestimmen fuer Enddaten
+            spistatus &= ~(1<<STARTDATEN_BIT);               // Bit fuer Startdaten zuruecksetzen
+            spistatus |= (1<<LB_BIT);                        // Bit fuer lb setzen
+            bitpos=0;
+            
+         }
+         
+      }
+      
+      
+      //   LB
+      else if (spistatus & (1<<LB_BIT))               // out_lbdaten senden, in_lbdaten laden
+      {
+         
+         if (SPI_CONTROL_PORTPIN & (1<<SPI_CONTROL_MOSI))   // bit ist HI
+         {
+            in_lbdaten |= (1<<(7-bitpos));
+            
+            // Echo laden
+            //SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
+         }
+         else                                                // bit ist LO
+         {
+            in_lbdaten |= (0<<(7-bitpos));
+            
+            // Echo laden
+            //SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
+         }
+         
+         
+         // Output laden
+         if (out_lbdaten & (1<<(7-bitpos)))                  // bit ist HI
+         {
+            SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
+         }
+         else                                                // bit ist LO
+         {
+            SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
+         }
+         
+         bitpos++;
+         
+         
+         if (bitpos>=8)   // Byte fertig
+         {
+            spistatus &= ~(1<<LB_BIT);                  // Bit fuer lb zuruecksetzen
+            spistatus |= (1<<HB_BIT);                  // Bit fuer hb setzen
+            bitpos=0;
+         }
+         
+      }      
+      //LB end
+      
+      //   HB
+      else if (spistatus & (1<<HB_BIT))               // out_hbdaten senden, in_hbdaten laden
+      {
+         
+         if (SPI_CONTROL_PORTPIN & (1<<SPI_CONTROL_MOSI))   // bit ist HI
+         {
+            in_hbdaten |= (1<<(7-bitpos));
+            
+            // Echo laden
+            //SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
+         }
+         else                                                // bit ist LO
+         {
+            in_hbdaten |= (0<<(7-bitpos));
+            
+            // Echo laden
+            //SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
+         }
+         
+         
+         // Output laden
+         if (out_hbdaten & (1<<(7-bitpos)))                  // bit ist HI
+         {
+            SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
+         }
+         else                                                // bit ist LO
+         {
+            SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
+         }
+         
+         bitpos++;
+         
+         if (bitpos>=8)   // Byte fertig
+         {
+            spistatus &= ~(1<<HB_BIT);                  // Bit fuer hb zuruecksetzen
+            
+            bitpos=0;
+         }
+         
+      }
+      //HB end
+      
+      
+      
+      else if (spistatus & (1<<ENDDATEN_BIT))               // out_enddaten senden, in_enddaten laden
+      {
+         
+         if (SPI_CONTROL_PORTPIN & (1<<SPI_CONTROL_MOSI))   // bit ist HI
+         {
+            in_enddaten |= (1<<(7-bitpos));
+            
+            // Echo laden
+            //SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
+         }
+         else                                                // bit ist LO
+         {
+            in_enddaten |= (0<<(7-bitpos));
+            
+            // Echo laden
+            //SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
+         }
+         
+         
+         // Output laden
+         //         if (out_enddaten & (1<<(7-bitpos)))                  // bit ist HI
+         if (complement & (1<<(7-bitpos)))                  // bit ist HI
+         {
+            SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
+         }
+         else                                                // bit ist LO
+         {
+            SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
+         }
+         
+         
+         bitpos++;
+         
+         
+         if (bitpos>=8)   // Byte fertig
+         {
+            spistatus &= ~(1<<ENDDATEN_BIT);                  // Bit fuer Enddaten zuruecksetzen
+            bitpos=0;
+            if (out_startdaten + in_enddaten==0xFF)
+            {
+               //lcd_putc('+');
+               //spistatus |= (1<<SUCCESS_BIT);               // Datenserie korrekt geladen
+               
+            }
+            else 
+            {
+               //lcd_putc('-');
+               //spistatus &= ~(1<<SUCCESS_BIT);               // Datenserie nicht korrekt geladen
+               errCounter++;
+            }
+            // 24.6.2010
+            //            out_startdaten=0xC0; ergab nicht korrekte Pruefsumme mit in_enddaten
+            //18.7.10
+            //            out_hbdaten=0;
+            //            out_lbdaten=0;
+            
+         }
+         
+      }
+      
+      else         // Datenarray in inbuffer laden, Daten von outbuffer senden
+         
+      {
+         if (SPI_CONTROL_PORTPIN & (1<<SPI_CONTROL_MOSI))   // bit ist HI
+         {
+            
+            inbuffer[ByteCounter] |= (1<<(7-bitpos));
+            
+            // Echo laden
+            //SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
+         }
+         else                                                // bit ist LO
+         {
+            inbuffer[ByteCounter] |= (0<<(7-bitpos));
+         }
+         
+         // Output laden
+         if (outbuffer[ByteCounter] & (1<<(7-bitpos)))      // bit ist HI
+         {
+            SPI_CONTROL_PORT |= (1<<SPI_CONTROL_MISO);
+         }
+         else                                                // bit ist LO
+         {
+            SPI_CONTROL_PORT &= ~(1<<SPI_CONTROL_MISO);
+         }
+          bitpos++;
+         if (bitpos>=8) // Byte fertig
+         {
+            if (ByteCounter<SPI_BUFSIZE -1 )                  // zweitletztes Byte
+            {
+               ByteCounter++;
+            }
+            else 
+            {
+               spistatus |= (1<<ENDDATEN_BIT);               // Bit fuer Enddaten setzen
+            }
+            bitpos=0;
+         }   // if bitpos
+      }                  //  Datenarray in inbuffer laden, Daten von outbuffer senden
+   }                  // if (spistatus & (1<<ACTIVE_BIT))
+}
+// ISR
 
 
 
