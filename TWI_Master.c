@@ -799,6 +799,31 @@ void masterinit(void)
 	SRPORT |= (1<<SR_DATA_PIN);// HI
 }
 
+uint8_t daySettingSchreiben(uint8_t raum, uint8_t objekt, uint8_t wochentag,  uint8_t data[])
+{
+   uint8_t pos = 0;
+   for(pos=0;pos<16;pos++)
+   {
+      if (daySettingArray[pos][15] == 0) // Element noch frei
+      {
+         daySettingArray[pos][0]= raum;
+         daySettingArray[pos][1]= objekt;
+         daySettingArray[pos][2]= wochentag;
+         uint8_t datapos=0;
+         for(datapos=0;datapos<8;datapos++)
+         {
+            daySettingArray[pos][3 + datapos]= data[datapos];
+         }
+         daySettingArray[pos][15] = 1; // besetzt
+         return pos;
+      }
+      
+   }
+   return 13; // kein Platz
+}//daySettingSchreiben
+
+
+
 void sevenseginit(void)
 {
    DDRA |= 0x1E; // PORTA 1-4 Ausgang  fuer siebenseg
@@ -1003,7 +1028,7 @@ uint8_t PWMDatenAbrufen (void)
 
 uint8_t RTC_Abrufen (void)
 {
-	/*
+   /*
     Zeit.minute = DCF77daten[0];
     Zeit.stunde = DCF77daten[1];
     Zeit.kalendertag = DCF77daten[2];
@@ -1013,7 +1038,7 @@ uint8_t RTC_Abrufen (void)
     
     
     */
-	/*
+   /*
     struct time
     {
     uint8_t sekunde;
@@ -1026,11 +1051,11 @@ uint8_t RTC_Abrufen (void)
     };
     */
    
-	//	RTC-Uhr lesen
-	//uint8_t data;
-	uint8_t RTCerfolg=0;
-	
-	/*
+   //	RTC-Uhr lesen
+   //uint8_t data;
+   uint8_t RTCerfolg=0;
+   outbuffer[6] = 0;
+   /*
     // Sekunden lesen: Register 0
     RTCerfolg= DS1307Read(0x00,&data);
     if (RTCerfolg)
@@ -1058,43 +1083,43 @@ uint8_t RTC_Abrufen (void)
     }
     uint8_t stunde=((data & 0xF0)>>4)*10 + (data & 0x0F);;
     */
-	uint8_t sekunde=0;
-	uint8_t minute=0;
-	uint8_t stunde=0;
-	
-	
-	
-	RTCerfolg=read_Zeit(&sekunde, &minute, &stunde);
-	
-	if (test)
-	{
-		err_gotoxy(0,0);
-		err_putint2(stunde);
-		err_putc(':');
-		err_putint2(minute);
+   uint8_t sekunde=0;
+   uint8_t minute=0;
+   uint8_t stunde=0;
+   
+   
+   
+   RTCerfolg=read_Zeit(&sekunde, &minute, &stunde);
+   
+   if (test)
+   {
+      err_gotoxy(0,0);
+      err_putint2(stunde);
+      err_putc(':');
+      err_putint2(minute);
       err_gotoxy(0,4);
       err_putc(' ');
       err_gotoxy(0,4);
       err_putc('>');
       err_puthex(RTCerfolg);
-	}
+   }
    err_gotoxy(0,0);
    err_puthex(RTCerfolg);
    
-	
-	RTCdaten[0]=minute;
-	RTCdaten[1]=stunde;
-	
    
-	uint8_t wochentag;
-	uint8_t tagdesmonats;
-	uint8_t monat;
-	uint8_t jahr;
-	
-	RTCerfolg=Read_Datum(&wochentag,&tagdesmonats,&monat,&jahr);
-	
-	
-	
+   RTCdaten[0]=minute;
+   RTCdaten[1]=stunde;
+   
+   
+   uint8_t wochentag;
+   uint8_t tagdesmonats;
+   uint8_t monat;
+   uint8_t jahr;
+   
+   RTCerfolg=Read_Datum(&wochentag,&tagdesmonats,&monat,&jahr);
+   
+   
+   
    /*
     err_gotoxy(0,1);
     //err_puthex(RTCerfolg);
@@ -1108,49 +1133,17 @@ uint8_t RTC_Abrufen (void)
     err_putint2(wochentag);
     */
    
-   if (test)
-   {
-      /*
-      err_gotoxy(6, 1);
-      switch (wochentag)
-      {
-         case 1:
-            err_puts("MO\0");
-            break;
-         case 2:
-            err_puts("DI\0");
-            break;
-         case 3:
-            err_puts("MI\0");
-            break;
-         case 4:
-            err_puts("DO\0");
-            break;
-         case 5:
-            err_puts("FR\0");
-            break;
-         case 6:
-            err_puts("SA\0");
-            break;
-         case 7:
-            err_puts("SO\0");
-            break;
-            
-      }//switch wochentag
-       */
-      
-   }
-
+    
    err_gotoxy(2,0);
    err_puthex(RTCerfolg);
-
-	RTCdaten[2]=tagdesmonats;
-	RTCdaten[3]=monat;
-	RTCdaten[4]=jahr;
-	RTCdaten[5]=wochentag;
-	
-	return RTCerfolg;
-	// end Uhr lesen
+   
+   RTCdaten[2]=tagdesmonats;
+   RTCdaten[3]=monat;
+   RTCdaten[4]=jahr;
+   RTCdaten[5]=wochentag;
+   outbuffer[6] = RTCerfolg+1; // 0xB0 bei Aktualisieren
+   return RTCerfolg;
+   // end Uhr lesen
 }
 
 void RTC_Aktualisieren(void)
@@ -1159,7 +1152,9 @@ void RTC_Aktualisieren(void)
    uint8_t RTC_erfolg=1;
    err_gotoxy(19,0);
    err_putc(' ');
-   
+   outbuffer[6] = 0;
+   err_gotoxy(4,0);
+   err_puts("       ");
    while (RTC_erfolg && versuche<0x0F)
    {
       RTC_erfolg = RTC_Abrufen();
@@ -1306,124 +1301,9 @@ void DataTask(void)
       //sync start
       // alle 60 Min: Warten starten
       //if ((((min/30)&&(min%30==0)&&(std<23))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
- 
-      /*
-      if (((min/30)&&(min%30==0)&&(std<23)) && (!(uhrstatus & (1<<SYNC_WAIT))))
-      {
-         {
-            //  out_startdaten = SYNCWAITTASK;
-            uhrstatus &= ~(1<<SYNC_OK);
-            uhrstatus |= (1<<SYNC_WAIT); // Beginn Sync, Warten starten
-            DCF77_counter=0; // Zaehler fuer korrekte Daten
-            
-            err_gotoxy(4,0);
-            err_puts("            \0");
-            
-            lcd_clr_line(1);
-            lcd_puts("S  ");
-            lcd_puts(" WAIT");
-         }
-         
-      }
-  */  
       
-  /*    
-      if (uhrstatus & (1<<SYNC_WAIT)) // Warten auf genuegende Anzahl korrekter Daten
-      {
-         TWI_FLAG = 0;
-         //uint8_t newminute=0;
-         uint8_t DCF77_erfolg = UhrAbrufen(); // DCF-Uhr abrufen
-         if (DCF77_erfolg) // Fehler
-         {
-            err_gotoxy(16, 0);
-            err_puts("DCF\0");
-            err_putc('!');
-            DCF77_counter=0; // zurueck auf Feld 1. Uhr hat einen Fehler, Synchronisation neu starten
-         }
-         else // Wert ist OK
-         {
-            lcd_gotoxy(19, 1);
-            lcd_putc('+');
-            //lcd_putint2(DCF77daten[0]);         // Minuten
-            // erste Synchronisation?
-            if (uhrstatus & (1<<SYNC_NULL))     // Nach reset, noch keine oldmin ...
-            {
-               // startwerte setzen
-               oldmin=DCF77daten[0];
-               oldstd=DCF77daten[1];
-               oldtag=DCF77daten[2];
-               //180502               uhrstatus &= ~(1<<SYNC_NULL);
-               //        uhrstatus |= (1<<SYNC_NEW);         // TWI soll noch keine Daten uebertragen
-            }
-            else if (!(oldmin == DCF77daten[0]))   // minute hat sich geaendert
-            {
-               //lcd_gotoxy(0,1);
-               //lcd_puts("       \0");
-               
-               lcd_gotoxy(1,1);
-               lcd_putc('1');                      // Anzeige, dass Synch laeuft
-               
-               // Kontrolle, ob Daten korrekt
-               
-               if ((oldstd==DCF77daten[1])&&(oldtag==DCF77daten[2])) // stunde und tag sind noch gleich
-               {
-                  lcd_gotoxy(1,1);
-                  lcd_putc('2');
-                  if ( DCF77daten[0]==(oldmin+1)) // naechste minute, Aenderung korrekt
-                  {
-                     lcd_gotoxy(1,1);
-                     lcd_putc('3');
-                     
-                     DCF77_counter++;
-                     
-                     
-                     lcd_putint1(DCF77_counter);
-                     oldmin=DCF77daten[0];
-                     if (DCF77_counter >= MIN_SYNC) // genuegende Anzahl korrekte Daten
-                     {
-                        lcd_gotoxy(1,1);
-                        lcd_putc('4');
-                        lcd_putc(' ');
-                        DCF77_counter =0;
-                        uhrstatus |= (1<<SYNC_READY); // Synchronisation ausloesen
-                        uhrstatus &= ~(1<<SYNC_WAIT); // WAIT zuruecksetzen
-                     }
-                  }
-                  else // fehler
-                  {
-                     DCF77_counter =0;                // Counter zuruecksetzen
-                     
-                     oldmin=DCF77daten[0];
-                     oldstd=DCF77daten[1];
-                     oldtag=DCF77daten[2];
-                     
-                  }
-                  
-               } //if (oldstd==DCF77daten[1])&&(oldtag=DCF77daten[2])
-               else // fehler
-               {
-                  DCF77_counter =0;
-                  oldmin=DCF77daten[0];
-                  oldstd=DCF77daten[1];
-                  oldtag=DCF77daten[2];
-                  
-               }
-               
-            }
-            
-            
-            
-         } // end DCF77erfolg=0
-         if (TWI_FLAG >0)
-         {
-            err_gotoxy(10,2);
-            err_puthex(uhrstatus);
-            err_puthex(TWI_FLAG);
-            err_putc(
-         }
-         
-      } // end (uhrstatus & (1<<SYNC_WAIT)
-   */   
+      
+      
       // TODO: Bei fehlgeschlagener Synchronisation Uhr unverŠndert lassen. Eventuell mit ODER SYNC_READY und SYNC_NEW und SYNC_OK
       
       if (uhrstatus & (1<<SYNC_READY)) // DCF77-Uhr ist wieder bereit, RTC updaten (Zeit synchronisieren)
@@ -1495,10 +1375,10 @@ void DataTask(void)
       // Ende Synchronisation
    } // if NOT test
    
-//   err_gotoxy(10,2);
-//   err_puthex(uhrstatus);
-//   err_gotoxy(18,2);
-//   err_puthex(TWI_FLAG);
+   //   err_gotoxy(10,2);
+   //   err_puthex(uhrstatus);
+   //   err_gotoxy(18,2);
+   //   err_puthex(TWI_FLAG);
    
    outbuffer[39] = TWI_FLAG;
    
@@ -1626,14 +1506,14 @@ void DataTask(void)
          min= RTCdaten[0];
          std= RTCdaten[1];
          tag= RTCdaten[2];
- 
+         
          Zeit.minute = RTCdaten[0];
          Zeit.stunde = RTCdaten[1];
          Zeit.kalendertag = RTCdaten[2];
          Zeit.kalendermonat = RTCdaten[3];
          Zeit.kalenderjahr = RTCdaten[4];
          Zeit.wochentag = RTCdaten[5];   // RTC, DCF77: Montag=1; EEPROM: Montag=0
-
+         
          
          //   Zeit vorwaertsstellen
          if ((min > Zeit.minute) || ((min ==0)&&(std==0)) || (std> Zeit.stunde) ) //neue Minute oder neue Stunde oder neuer Tag
@@ -1659,14 +1539,14 @@ void DataTask(void)
                oldstd=RTCdaten[1];
                oldtag=RTCdaten[2];
             }
-             neueZeit=1; //   Zeit in RŠumen aktualisieren
+            neueZeit=1; //   Zeit in RŠumen aktualisieren
             // 29.9.08                  
             if ((Menu_Ebene & 0xF0)==0) // Oberste Ebene, AnzeigeWochentag aktualisieren
             {
                AnzeigeWochentag=Zeit.wochentag;
                
             }
-             
+            
          } //Zeit vorwaertsstellen
          wdt_reset();
          // end Uhr lesen
@@ -1719,7 +1599,7 @@ void DataTask(void)
             // xyz > uint_t16 code = Raum*100 + objekt*10 + Tag
             err_gotoxy(13,3);
             err_puts("r1");
-
+            
             uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock, HEIZUNG, 0, Zeit.wochentag);
             
             //OSZIAHI;
@@ -1756,20 +1636,20 @@ void DataTask(void)
                txbuffer[0]=0;
                switch (Zeit.minute/30)
                {
-                     case 0: // erste halbe Stunde  |_
+                  case 0: // erste halbe Stunde  |_
                   {
                      
                      txbuffer[0]=(Stundencode >=2); //Werte 2: erste halbe Std, 3: ganze Std auf FULL Wert 0: Brenner RED/OFF
                      // 
                      // Bit 3 fuer Anzeige der Halbstunde ist Null
                   }break;
-                     
-                     case 1: // zweite halbe Stunde _|
+                  
+                  case 1: // zweite halbe Stunde _|
                   {
                      txbuffer[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1: zweite halbe Std, 3: ganze Std auf FULL Wert 0: Brenner RED/OFF
                      HeizungStundencode |= (1<<3);   // Bit 3 fuer Anzeige der Halbstunde ist 1
                   }break;
-                     
+                  
                   default:
                   {
                      txbuffer[0]=0; // 7.4.11
@@ -1791,7 +1671,7 @@ void DataTask(void)
             }//erfolg ==0
             else
             {
-                // SPI senden verhindern
+               // SPI senden verhindern
                
                spistatus |= (1<<TWI_ERR_BIT);
                EEPROM_Err |= (1<<HEIZUNG);
@@ -1819,19 +1699,19 @@ void DataTask(void)
                Stundencode1 &= 0x03;   // Bit 0 und 1 filtern
                switch (Stundencode1)
                {
-                     case 0: // Grundstellung, Tag ON, Nacht OFF
-                     txbuffer[3] = 0x01; // Schalterposition 1
-                     break;
-                     
-                     case 1: // Tag ON, Nacht Red
-                     txbuffer[3] = 0x02; // Schalterposition 2
-                     break;
-                     
-                     case 2:
-                     txbuffer[3] = 0x04; // Schalterposition 4
-                     break;
-                     
-                     
+                  case 0: // Grundstellung, Tag ON, Nacht OFF
+                  txbuffer[3] = 0x01; // Schalterposition 1
+                  break;
+                  
+                  case 1: // Tag ON, Nacht Red
+                  txbuffer[3] = 0x02; // Schalterposition 2
+                  break;
+                  
+                  case 2:
+                  txbuffer[3] = 0x04; // Schalterposition 4
+                  break;
+                  
+                  
                }// switch Stundencode1
                
                
@@ -2015,14 +1895,14 @@ void DataTask(void)
             TWITASK = HEIZUNG;
             err_gotoxy(11,3);
             err_puthex(HEIZUNG);
-
+            
             //                  err_gotoxy(0,1);
             //                  err_puts("H\0");
             wdt_reset();
             twi_Call_count0++;
             err_gotoxy(13,3);
             err_puts("r5");
-
+            
             uint8_t Heizungerfolg=SlavedatenLesen(HEIZUNG_ADRESSE,HeizungRXdaten);
             //OSZIAHI;
             delay_ms(1);
@@ -2101,7 +1981,7 @@ void DataTask(void)
             outbuffer[5] |= HeizungStundencode;            // Bit 4, 5 gefiltert aus Tagplanwert von Brenner und Mode
             outbuffer[5] |= RinneStundencode;            // Bit 6, 7 gefiltert aus Tagplanwert von Rinne
             
-            outbuffer[6] = 0x00;                       // eventuell err von RTC
+            //outbuffer[6] = 0x00;                       // eventuell err von RTC
             outbuffer[7] = 0x00;   // offen
             
             //   outbuffer[29] = Echo;// 7.4.11 auskomm.
@@ -2128,7 +2008,7 @@ void DataTask(void)
             TWITASK = WERKSTATT;
             err_gotoxy(11,3);
             err_puthex(WERKSTATT);
-
+            
             //                  err_gotoxy(4,1);
             //                  err_puts("W\0");
             /*
@@ -2159,7 +2039,7 @@ void DataTask(void)
                //err_puthex(Stundencode);
                switch (Zeit.minute/30)
                {
-                     case 0: // erste halbe Stunde
+                  case 0: // erste halbe Stunde
                   {
                      if (Stundencode >=2)   //   Werte 2, 3: Lampe FULL Wert 0: Lampe OFF
                      {
@@ -2171,8 +2051,8 @@ void DataTask(void)
                         txbuffer[0] &= ~(1<< 0); // Bit 0 zuruecksetzen
                      }
                   }break;
-                     
-                     case 1: // zweite halbe Stunde
+                  
+                  case 1: // zweite halbe Stunde
                   {
                      
                      if ((Stundencode ==1)||(Stundencode==3))//Werte 1, 3: Brenner auf FULL Wert 0: Lampe OFF
@@ -2199,7 +2079,7 @@ void DataTask(void)
             txbuffer[1]=0;
             err_gotoxy(13,3);
             err_puts("r2");
-
+            
             erfolg = WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, Werkstatttagblock, WERKSTATT, 1, Zeit.wochentag);
             //err_puthex(erfolg);
             wdt_reset();
@@ -2238,7 +2118,7 @@ void DataTask(void)
             twi_Call_count0++;
             err_gotoxy(13,3);
             err_puts("w1");
-
+            
             erfolg=SlaveSchreiben(WERKSTATT_ADRESSE);
             wdt_reset();
             if (erfolg)
@@ -2260,7 +2140,7 @@ void DataTask(void)
             // EEPROM_WOCHENPLAN_ADRESSE, tagblock, raum, objekt, Wochentag
             err_gotoxy(13,3);
             err_puts("r2");
-
+            
             uint8_t obj3erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock3, WERKSTATT, 3, 0);
             //OSZIAHI;
             delay_ms(1);
@@ -2299,7 +2179,7 @@ void DataTask(void)
             TWITASK = WERKSTATT;
             err_gotoxy(11,3);
             err_puthex(WERKSTATT);
-
+            
             delay_ms(1);
             //err_gotoxy(5,1);
             //err_puts("W\0");
@@ -2308,7 +2188,7 @@ void DataTask(void)
             twi_Call_count0++;
             err_gotoxy(13,3);
             err_puts("r3");
-
+            
             uint8_t werkstatterfolg=SlavedatenLesen(WERKSTATT_ADRESSE,WerkstattRXdaten);
             wdt_reset();
             
@@ -2373,9 +2253,9 @@ void DataTask(void)
             TWITASK = WOZI;
             err_gotoxy(11,3);
             err_puthex(WOZI);
-
+            
             delay_ms(1);
-              
+            
             //                  err_puts("W\0");
             
             //delay_ms(1);
@@ -2390,24 +2270,24 @@ void DataTask(void)
             // Lampe lesen
             err_gotoxy(13,3);
             err_puts("r1");
-
+            
             uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, WoziTagblock, WOZI, 0, Zeit.wochentag);
             wdt_reset();
             if (erfolg==0)
             {
                Stundencode=Tagplanwert(WoziTagblock, Zeit.stunde);
-                 //outbuffer[29] |= Stundencode; // 9.4.11
+               //outbuffer[29] |= Stundencode; // 9.4.11
                
                switch (Zeit.minute/30)
                {
-                     case 0: // erste halbe Stunde
+                  case 0: // erste halbe Stunde
                   {
                      
                      WoZiTXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
                      
                   }break;
-                     
-                     case 1: // zweite halbe Stunde
+                  
+                  case 1: // zweite halbe Stunde
                   {
                      WoZiTXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
                   }break;
@@ -2441,14 +2321,14 @@ void DataTask(void)
             uint8_t tagblock1[buffer_size];
             err_gotoxy(13,3);
             err_puts("r2");
-
+            
             uint8_t obj1erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock1, WOZI, 1, Zeit.wochentag);
             if (obj1erfolg==0) // EEPROM erfolgreich gelesen
             {
                int RadiatorStundencode=Tagplanwert(tagblock1, Zeit.stunde);
- //              err_gotoxy(10,2);
- //              err_puthex(RadiatorStundencode);
-
+               //              err_gotoxy(10,2);
+               //              err_puthex(RadiatorStundencode);
+               
                RadiatorStundencode &= 0x03;   // Bit 0 und 1 filtern fuer WoZiTXdaten[1]
                WoZiTXdaten[1] = RadiatorStundencode;
                
@@ -2468,7 +2348,7 @@ void DataTask(void)
             uint8_t wozierfolg=0;
             err_gotoxy(13,3);
             err_puts("w1");
-
+            
             wozierfolg=SlavedatenSchreiben(WOZI_ADRESSE,  WoZiTXdaten);
             
             wdt_reset();
@@ -2497,13 +2377,13 @@ void DataTask(void)
             TWITASK = WOZI;
             err_gotoxy(11,3);
             err_puthex(WOZI);
-
+            
             delay_ms(1);
             wdt_reset();
             twi_Call_count0++;
             err_gotoxy(13,3);
             err_puts("r3");
-
+            
             uint8_t wozierfolg=SlavedatenLesen(WOZI_ADRESSE, (void*)WoZiRXdaten);
             wdt_reset();
             if (wozierfolg)
@@ -2518,22 +2398,22 @@ void DataTask(void)
                pos=(PINC & 0x30)>>4; // Bit 4, 5
                switch (pos)
                {
-                     case 0:
-                     WoZiTXdaten[4]=0;
-                     break;
-                     
-                     case 1:
-                     WoZiTXdaten[4]=35;
-                     break;
-                     
-                     case 2:
-                     WoZiTXdaten[4]=50;
-                     break;
-                     
-                     case 3:
-                     WoZiTXdaten[4]=65;
-                     break;
-                     
+                  case 0:
+                  WoZiTXdaten[4]=0;
+                  break;
+                  
+                  case 1:
+                  WoZiTXdaten[4]=35;
+                  break;
+                  
+                  case 2:
+                  WoZiTXdaten[4]=50;
+                  break;
+                  
+                  case 3:
+                  WoZiTXdaten[4]=65;
+                  break;
+                  
                }//switch pos
                //      WebTxDaten[7]= WoZiRXdaten[1];   // Innentemperatur
                outbuffer[21]= WoZiRXdaten[1];
@@ -2543,7 +2423,7 @@ void DataTask(void)
             LeseStatus &= ~(1<< WOZI);
          }
          
-// start BUERO         
+         // start BUERO         
 #pragma mark Buero               
          //   *****************
          //   *   Buero
@@ -2868,7 +2748,7 @@ void DataTask(void)
             err_puthex(LABOR);
             err_gotoxy(13,3);
             err_puts("r1");
-
+            
             uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, LaborTagblock, LABOR, 0, Zeit.wochentag);
             wdt_reset();
             if (erfolg==0)
@@ -2878,14 +2758,14 @@ void DataTask(void)
                
                switch (Zeit.minute/30)
                {
-                     case 0: // erste halbe Stunde
+                  case 0: // erste halbe Stunde
                   {
                      
                      LaborTXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
                      
                   }break;
-                     
-                     case 1: // zweite halbe Stunde
+                  
+                  case 1: // zweite halbe Stunde
                   {
                      LaborTXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
                   }break;
@@ -2916,7 +2796,7 @@ void DataTask(void)
             wdt_reset();
             err_gotoxy(13,3);
             err_puts("r2");
-
+            
             erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, LaborTagblock, LABOR, 1, Zeit.wochentag);
             wdt_reset();
             if (erfolg==0)
@@ -2946,7 +2826,7 @@ void DataTask(void)
             twi_Call_count0++;
             err_gotoxy(13,3);
             err_puts("w1");
-
+            
             laborerfolg=SlavedatenSchreiben(LABOR_ADRESSE,  (void*)LaborTXdaten);
             wdt_reset();
             LaborTXdaten[4]=45;
@@ -2975,7 +2855,7 @@ void DataTask(void)
             TWITASK = LABOR;
             err_gotoxy(11,3);
             err_puthex(LABOR);
-
+            
             delay_ms(1);
             //                  err_gotoxy(12,1);
             //                  err_puts("L\0");
@@ -2986,7 +2866,7 @@ void DataTask(void)
             twi_Call_count0++;
             err_gotoxy(13,3);
             err_puts("r3");
-
+            
             uint8_t laborerfolg=SlavedatenLesen(LABOR_ADRESSE, LaborRXdaten);
             wdt_reset();
             if (laborerfolg)
@@ -3019,22 +2899,22 @@ void DataTask(void)
                //delay_ms(40);
                switch (pos)
                {
-                     case 0:
-                     LaborTXdaten[4]=0;
-                     break;
-                     
-                     case 1:
-                     LaborTXdaten[4]=35;
-                     break;
-                     
-                     case 2:
-                     LaborTXdaten[4]=50;
-                     break;
-                     
-                     case 3:
-                     LaborTXdaten[4]=65;
-                     break;
-                     
+                  case 0:
+                  LaborTXdaten[4]=0;
+                  break;
+                  
+                  case 1:
+                  LaborTXdaten[4]=35;
+                  break;
+                  
+                  case 2:
+                  LaborTXdaten[4]=50;
+                  break;
+                  
+                  case 3:
+                  LaborTXdaten[4]=65;
+                  break;
+                  
                }//switch pos
             }
             
@@ -3047,11 +2927,11 @@ void DataTask(void)
          //   *****************
          if (SchreibStatus & (1<< OG1))   //schreiben an OG1
          {
-           TWI_FLAG = 0;
+            TWI_FLAG = 0;
             TWITASK = OG1;
             err_gotoxy(11,3);
             err_puthex(OG1);
-
+            
             delay_ms(1);
             //   err_gotoxy(12,1);
             //                  err_puts("O\0");
@@ -3071,7 +2951,7 @@ void DataTask(void)
             wdt_reset();
             err_gotoxy(13,3);
             err_puts("r1");
-
+            
             uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, OG1Tagblock, OG1, 0, Zeit.wochentag);
             wdt_reset();
             if (erfolg==0)
@@ -3079,14 +2959,14 @@ void DataTask(void)
                Stundencode=Tagplanwert(OG1Tagblock, Zeit.stunde);
                switch (Zeit.minute/30)
                {
-                     case 0: // erste halbe Stunde
+                  case 0: // erste halbe Stunde
                   {
                      
                      OG1TXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
                      
                   }break;
-                     
-                     case 1: // zweite halbe Stunde
+                  
+                  case 1: // zweite halbe Stunde
                   {
                      OG1TXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
                   }break;
@@ -3121,7 +3001,7 @@ void DataTask(void)
             twi_Call_count0++;
             err_gotoxy(13,3);
             err_puts("w1");
-
+            
             og1erfolg=SlavedatenSchreiben(OG1_ADRESSE,  OG1TXdaten);
             
             wdt_reset();
@@ -3152,7 +3032,7 @@ void DataTask(void)
             TWITASK = OG1;
             err_gotoxy(11,3);
             err_puthex(OG1);
-
+            
             delay_ms(1);
             //                  err_gotoxy(12,1);
             //                  err_puts("L\0");
@@ -3163,7 +3043,7 @@ void DataTask(void)
             twi_Call_count0++;
             err_gotoxy(13,3);
             err_puts("r2");
-
+            
             uint8_t og1erfolg=SlavedatenLesen(OG1_ADRESSE, OG1RXdaten);
             wdt_reset();
             if (og1erfolg)
@@ -3182,7 +3062,7 @@ void DataTask(void)
                twi_Reply_count0++;
                uint8_t pos=0x00;
                pos=(PINC & 0x30)>>4; // Bit 4, 5
-                 
+               
             }
             
             LeseStatus &= ~(1<< OG1);
@@ -3198,7 +3078,7 @@ void DataTask(void)
             TWITASK = OG2;
             err_gotoxy(11,3);
             err_puthex(OG2);
-
+            
             delay_ms(1);
             uint8_t OG2Tagblock[buffer_size];
             uint8_t Stundencode=0;
@@ -3206,7 +3086,7 @@ void DataTask(void)
             wdt_reset();
             err_gotoxy(13,3);
             err_puts("r1");
-
+            
             uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, OG2Tagblock, OG2, 0, Zeit.wochentag);
             wdt_reset();
             if (erfolg==0)
@@ -3214,14 +3094,14 @@ void DataTask(void)
                Stundencode=Tagplanwert(OG2Tagblock, Zeit.stunde);
                switch (Zeit.minute/30)
                {
-                     case 0: // erste halbe Stunde
+                  case 0: // erste halbe Stunde
                   {
                      
                      OG2TXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
                      
                   }break;
-                     
-                     case 1: // zweite halbe Stunde
+                  
+                  case 1: // zweite halbe Stunde
                   {
                      OG2TXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
                   }break;
@@ -3247,7 +3127,7 @@ void DataTask(void)
             //               twi_Call_count0++;
             err_gotoxy(13,3);
             err_puts("w1");
-
+            
             og2erfolg=SlavedatenSchreiben(OG2_ADRESSE,  OG2TXdaten);
             
             wdt_reset();
@@ -3268,7 +3148,7 @@ void DataTask(void)
             uint8_t tagblock3[buffer_size];
             err_gotoxy(13,3);
             err_puts("r2");
-
+            
             uint8_t obj3erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock3, OG2, 3, 0);
             //OSZIAHI;
             delay_ms(1);
@@ -3308,13 +3188,13 @@ void DataTask(void)
             TWITASK = OG2;
             err_gotoxy(11,3);
             err_puthex(OG2);
-
+            
             delay_ms(1);
             wdt_reset();
             twi_Call_count0++;
             err_gotoxy(13,3);
             err_puts("r1");
-
+            
             uint8_t og2erfolg=SlavedatenLesen(OG2_ADRESSE, OG2RXdaten);
             wdt_reset();
             if (og2erfolg)
@@ -3333,7 +3213,7 @@ void DataTask(void)
                twi_Reply_count0++;
                uint8_t pos=0x00;
                pos=(PINC & 0x30)>>4; // Bit 4, 5
-                 outbuffer[8] = OG2RXdaten[1];
+               outbuffer[8] = OG2RXdaten[1];
                //err_putint(outbuffer[8]);
             }
             LeseStatus &= ~(1<< OG2);// Innentemperatur
@@ -3357,7 +3237,7 @@ void DataTask(void)
             TWITASK = ESTRICH;
             err_gotoxy(11,3);
             err_puthex(ESTRICH);
-
+            
             delay_ms(1);
             uint8_t EstrichTagblock[buffer_size];
             uint8_t Stundencode=0;
@@ -3365,7 +3245,7 @@ void DataTask(void)
             wdt_reset();
             err_gotoxy(13,3);
             err_puts("r1");
-
+            
             uint8_t erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, EstrichTagblock, ESTRICH, 0, Zeit.wochentag);
             wdt_reset();
             if (erfolg==0)
@@ -3373,14 +3253,14 @@ void DataTask(void)
                Stundencode=Tagplanwert(EstrichTagblock, Zeit.stunde);
                switch (Zeit.minute/30)
                {
-                     case 0: // erste halbe Stunde
+                  case 0: // erste halbe Stunde
                   {
                      
                      EstrichTXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
                      
                   }break;
-                     
-                     case 1: // zweite halbe Stunde
+                  
+                  case 1: // zweite halbe Stunde
                   {
                      EstrichTXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
                   }break;
@@ -3404,7 +3284,7 @@ void DataTask(void)
             twi_Call_count0++;
             err_gotoxy(13,3);
             err_puts("w1");
-
+            
             estricherfolg=SlavedatenSchreiben(ESTRICH_ADRESSE,  EstrichTXdaten);
             
             wdt_reset();
@@ -3430,13 +3310,13 @@ void DataTask(void)
             TWITASK = ESTRICH;
             err_gotoxy(11,3);
             err_puthex(ESTRICH);
-
+            
             delay_ms(1);
             wdt_reset();
             twi_Call_count0++;
             err_gotoxy(13,3);
             err_puts("r2");
-
+            
             uint8_t estricherfolg=SlavedatenLesen(ESTRICH_ADRESSE, (void*)EstrichRXdaten);
             wdt_reset();
             if (estricherfolg)
@@ -3556,7 +3436,7 @@ void DataTask(void)
          //err_clr_part(1,9,19);
          //err_puts("wl B er\0");
          err_puthex(TWI_FLAG);
-      
+         
       }
       err_gotoxy(0,1);
       err_puts("          \0");
@@ -3640,7 +3520,7 @@ void DataTask(void)
             
          }
          
-         if (twi_Stat_count>reply_delay) // reset
+         if (twi_Stat_count > reply_delay) // reset
          {
             //WebTxStartDaten= MASTERERRTASK;
             //WebTxDaten[0]=MASTERERRTASK;
@@ -4184,6 +4064,10 @@ int main (void)
             {
                uhrstatus |= (1<<SYNC_NEW); // noch keine gueltige Zeit
             }
+            else 
+            {
+               uhrstatus &= ~(1<<SYNC_NEW);
+            }
 				wdt_reset();
              
 				sei();
@@ -4257,7 +4141,7 @@ int main (void)
 				loopcount1=0;
 			}
 			
-		}
+		} // if (loopcount0
      
       if (test) // Start der TWI-Routinen ohne Webserver
       {
@@ -4274,7 +4158,7 @@ int main (void)
             testcounterH=0;
          }
          
-      }
+      }// if test
 
 		
 		
@@ -4467,7 +4351,8 @@ int main (void)
                   Zeit.minute = inbuffer[17];
                   //err_putc('*');
                }
-               else {
+               else 
+               {
                   err_gotoxy(15,0);
                   err_puts("   ");
                   err_gotoxy(15,0); 
@@ -5084,60 +4969,122 @@ int main (void)
                   
 						permanent = inbuffer[8];
                   uint8_t eepromerfolg=0;
+                  uint8_t heuteerfolg=0;
                   // Identifikation im heutearray:
                   uint16_t dataindex = 56*raum + 7*objekt + wochentag;
-                  
-                  {
-						lcd_gotoxy(0,1);
-						lcd_puts("wE\0");
-						
-						lcd_puthex(in_startdaten);
-						lcd_putc(' ');
-						
-						//Empfangene Angaben vom EEPRPOM
-                  
-                  
-						lcd_puthex(in_hbdaten);
-						lcd_puthex(in_lbdaten);
-                  lcd_putc(' ');
-                  lcd_putint16(i2cStartadresse);
-                  lcd_putc('*');
-                  /*
-						lcd_putc('r');                  
-                  lcd_putint2(raum);
-                  lcd_putc('o');
-                  lcd_putint2(objekt);
-                  lcd_putc('w');
-                  lcd_putint2(wochentag);
-                  */
-                  /*
-                  err_gotoxy(0,2);
-						err_puthex(EEPROMTXdaten[0]);
-						err_puthex(EEPROMTXdaten[1]);
-						err_puthex(EEPROMTXdaten[2]);
-                  
-						err_puthex(EEPROMTXdaten[3]);
-                  err_puthex(EEPROMTXdaten[4]);
-                  err_puthex(EEPROMTXdaten[5]);
-                   */
-                  //lcd_putc('*');
-                  //err_puthex(EEPROMTXdaten[6]);
-                  //err_puthex(EEPROMTXdaten[7]);
+                  if ((permanent==1) || (permanent==3)) // Daten ins EEPROM
+                 {
+                    lcd_gotoxy(0,1);
+                    lcd_puts("wE\0");
+                    
+                    lcd_puthex(in_startdaten);
+                    lcd_putc(' ');
+                    
+                    //Empfangene Angaben vom EEPRPOM
+                    
+                    
+                    lcd_puthex(in_hbdaten);
+                    lcd_puthex(in_lbdaten);
+                    lcd_putc(' ');
+                    lcd_putint16(i2cStartadresse);
+                    lcd_putc('*');
+                    /*
+                     lcd_putc('r');                  
+                     lcd_putint2(raum);
+                     lcd_putc('o');
+                     lcd_putint2(objekt);
+                     lcd_putc('w');
+                     lcd_putint2(wochentag);
+                     */
+                    /*
+                     err_gotoxy(0,2);
+                     err_puthex(EEPROMTXdaten[0]);
+                     err_puthex(EEPROMTXdaten[1]);
+                     err_puthex(EEPROMTXdaten[2]);
+                     
+                     err_puthex(EEPROMTXdaten[3]);
+                     err_puthex(EEPROMTXdaten[4]);
+                     err_puthex(EEPROMTXdaten[5]);
+                     */
+                    //lcd_putc('*');
+                    //err_puthex(EEPROMTXdaten[6]);
+                    //err_puthex(EEPROMTXdaten[7]);
+                    
+                    
+                    
+                    
+                    // EEPROMTXdaten: Array mit den Daten fuer das EEPROM, vom Webserver 
+                    // hbyte, lbyte: Adresse im EEPROM, geschickt vom Webserver						
+                    // Daten ins EEPROM schreiben
+                    
+                    eepromerfolg=EEPROMTagSchreiben(0xA0,(void*)EEPROMTXdaten,hbyte ,lbyte);
+                    //err_gotoxy(19,0);
+                    //err_puts("erf\0");
+                    //err_puthex(eepromerfolg);
+                    
+                    // erledigt
+                    if (eepromerfolg==0) // alles ok
+                    {
+                       //err_gotoxy(19,1);
+                       //err_putc('<');
+                       
+                       out_startdaten= EEPROMCONFIRMTASK; // B5
+                       outbuffer[0]=EEPROMCONFIRMTASK;
+                       
+                       // SPI senden veranlassen
+                       BUS_Status |= (1<<SPI_SENDBIT);
+                       
+                       outbuffer[1]=1;
+                       err_gotoxy(19,1);
+                       err_putc('^');
+                       
+                    }
+                    else
+                    {
+                       // SPI senden verhindern
+                       spistatus |= (1<<TWI_ERR_BIT);
+                       out_startdaten= NULLTASK; // B0
+                       outbuffer[1]=2;
+                       lcd_gotoxy(19,1);
+                       lcd_putc('!');
+                       
+                    }
 
-						
-						
-						
-						// EEPROMTXdaten: Array mit den Daten fuer das EEPROM, vom Webserver 
-						// hbyte, lbyte: Adresse im EEPROM, geschickt vom Webserver						
-                  // Daten ins EEPROM schreiben
-                  
-						eepromerfolg=EEPROMTagSchreiben(0xA0,(void*)EEPROMTXdaten,hbyte ,lbyte);
-						//err_gotoxy(19,0);
-						//err_puts("erf\0");
-						//err_puthex(eepromerfolg);
-						
-						// erledigt
-                  }
+                 }
+                 else // Daten in daySettingArray schreiben
+                 {
+                    heuteerfolg = daySettingSchreiben(raum, objekt, wochentag,  (void*)EEPROMTXdaten);
+                    if (heuteerfolg < 16) // alles ok, es hatte noch platz
+                    {
+                       //err_gotoxy(19,1);
+                       //err_putc('<');
+                       
+                       out_startdaten= EEPROMCONFIRMTASK; // B5
+                       outbuffer[0]=EEPROMCONFIRMTASK;
+                       
+                       // SPI senden veranlassen
+                       BUS_Status |= (1<<SPI_SENDBIT);
+                       
+                       outbuffer[1]=1;
+                       err_gotoxy(19,1);
+                       err_putc('H');
+                       err_gotoxy(12,0);
+                       err_puthex(heuteerfolg); // pos im array
+                       
+                    }
+                    else
+                    {
+                       // SPI senden verhindern
+                       spistatus |= (1<<TWI_ERR_BIT);
+                       out_startdaten= NULLTASK; // B0
+                       outbuffer[1]=heuteerfolg;
+                       lcd_gotoxy(19,1);
+                       lcd_putc('!');
+                       
+                    }
+
+                 
+                 }
 						
 						EEPROMTXStartdaten=0;
 						
@@ -5146,33 +5093,7 @@ int main (void)
                   // Im Moment nicht verwendet. Webserver fragt nicht nach
                   // >> 180421 Webserver fragt nach
 						
-						if (eepromerfolg==0) // alles ok
-						{
-							//err_gotoxy(19,1);
-							//err_putc('<');
 							
-							out_startdaten= EEPROMCONFIRMTASK; // B5
-							outbuffer[0]=EEPROMCONFIRMTASK;
-							
-							// SPI senden veranlassen
-							BUS_Status |= (1<<SPI_SENDBIT);
-							
-							outbuffer[1]=1;
-							err_gotoxy(19,1);
-							err_putc('^');
-							
-						}
-						else
-						{
-							// SPI senden verhindern
-							spistatus |= (1<<TWI_ERR_BIT);
-                     out_startdaten= NULLTASK; // B0
-							outbuffer[1]=2;
-							lcd_gotoxy(19,1);
-							lcd_putc('!');
-							
-						}
-						
 						lbyte=0;
 						hbyte=0;
 						in_startdaten=0;
