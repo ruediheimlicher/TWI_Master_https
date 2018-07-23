@@ -160,7 +160,7 @@ volatile uint8_t     daySettingArray[16][16] = {{0}}; // 1 Zeile pro paket, 16 b
  byte0:  
  */
 volatile uint8_t                        permanent;
-void daySettingSchreiben(uint8_t wochentag, uint8_t raum, uint8_t data[]);
+uint8_t daySettingSchreiben(uint8_t raum, uint8_t objekt, uint8_t wochentag,  uint8_t data[]);
 
 uint8_t daySettingLesen(uint8_t wochentag, uint8_t raum, uint8_t data[]);
 
