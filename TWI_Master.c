@@ -1341,6 +1341,7 @@ void DataTask(void)
          
          // ev. weg
          uint8_t RTC_erfolg = RTC_Abrufen();
+         outbuffer[6] = RTC_erfolg;
          if (RTC_erfolg)                           // Fehler, aussteigen
          {
             SchreibStatus=0;
@@ -1350,13 +1351,11 @@ void DataTask(void)
             err_putc(' ');
             err_puthex(RTC_erfolg);
             err_putc('!');
-            
-            outbuffer[6] = RTC_erfolg;
-            
-            // aktuelle Schlaufe verlassen
+             // aktuelle Schlaufe verlassen
          }
          else
          {
+            
             err_gotoxy(12,2);
             err_puts("RTC OK\0");
             //err_gotoxy(0,2);
