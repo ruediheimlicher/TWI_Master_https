@@ -1028,17 +1028,7 @@ uint8_t PWMDatenAbrufen (void)
 
 uint8_t RTC_Abrufen (void)
 {
-   /*
-    Zeit.minute = DCF77daten[0];
-    Zeit.stunde = DCF77daten[1];
-    Zeit.kalendertag = DCF77daten[2];
-    Zeit.kalendermonat = DCF77daten[3];
-    Zeit.kalenderjahr = DCF77daten[4];
-    Zeit.wochentag = DCF77daten[5]-1;// DCF77 ist 1-basiert
-    
-    
-    */
-   /*
+    /*
     struct time
     {
     uint8_t sekunde;
@@ -1279,17 +1269,10 @@ void DataTask(void)
       {
          //if ((min/30)&&(min%30==0)&&(std<23))
          {
+            
             RTC_Aktualisieren();
          }
       }
-      
-      
-      //lcd_gotoxy(16,0);
-      //lcd_putc('+');
-      
-      //lcd_putint2(DCF77daten[1]);
-      //lcd_putc(':');
-      //lcd_putint2(DCF77daten[0]);
       
       
 #pragma mark Synchronisation
@@ -1300,7 +1283,10 @@ void DataTask(void)
       
       //sync start
       // alle 60 Min: Warten starten
-      //if ((((min/30)&&(min%30==0)&&(std<23))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
+      if ((((min/30)&&(min%30==0)&&(std<23))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
+      {
+         uhrstatus |= (1<<SYNC_READY);
+      }
       
       
       
@@ -1311,9 +1297,10 @@ void DataTask(void)
          TWI_FLAG = 0;
          //    out_startdaten = SYNCOKTASK;
          uint8_t res=0;
-         res=rtc_write_Zeit(DCF77daten[1], DCF77daten[0],0); // stunde, minute, sekunde
          
-         res=rtc_write_Datum(DCF77daten[5], DCF77daten[2], DCF77daten[3],DCF77daten[4]);
+     //    res=rtc_write_Zeit(DCF77daten[1], DCF77daten[0],0); // stunde, minute, sekunde
+         
+     //    res=rtc_write_Datum(DCF77daten[5], DCF77daten[2], DCF77daten[3],DCF77daten[4]);
          uhrstatus &= ~(1<<SYNC_READY);
          uhrstatus |= (1<<SYNC_OK);
          //     uhrstatus &= ~(1<<SYNC_NEW);                 // TWI soll jetzt Daten senden
@@ -1328,13 +1315,21 @@ void DataTask(void)
          }
          else
          {
-            
-            lcd_putint2(DCF77daten[1]);
+             /*
+             RTCdaten[0]=minute;
+             RTCdaten[1]=stunde;
+             RTCdaten[2]=tagdesmonats;
+             RTCdaten[3]=monat;
+             RTCdaten[4]=jahr;
+             RTCdaten[5]=wochentag;
+             */
+            lcd_putint2(RTCdaten[1]);
             lcd_putc(':');
-            lcd_putint2(DCF77daten[0]);
+            lcd_putint2(RTCdaten[0]);
             lcd_putc(':');
-            lcd_putint1(DCF77daten[5]-1);
+            lcd_putint1(RTCdaten[5]-1);
             lcd_puts(" SYNC+");
+            
          }
          lcd_gotoxy(16, 1);
          lcd_puts("   \0");
@@ -1390,25 +1385,14 @@ void DataTask(void)
    outbuffer[41] = RTCdaten[3] & 0x0F; //  monat
    
    uint8_t jahrab2010 = RTCdaten[4]  -10; // Jahr ab 2010
-   jahrab2010 <<=4; // bit
+   
+   //jahrab2010 <<=4; // bit
    outbuffer[41] |= jahrab2010  ;
    
    // ++++++++++++++++++++++++++++++++
    // End NOT TEST
    // ++++++++++++++++++++++++++++++++      
-   /*
-    err_gotoxy(0,3);
-    err_putc('R');
-    err_putint2(RTCdaten[1]);
-    err_putc(':');
-    err_putint2(RTCdaten[0]);
-    err_putc(' ');
-    err_putc('D');
-    err_putint2(DCF77daten[1]);
-    err_putc(':');
-    err_putint2(DCF77daten[0]);
-    */
-   
+    
    
 #pragma mark readSR                        
    
@@ -2538,6 +2522,7 @@ void DataTask(void)
                BueroTXdaten[1] = Zeit.stunde;
                BueroTXdaten[2] = Zeit.minute;
                BueroTXdaten[3] = Stundencode;
+               BueroTXdaten[4] = Stundencode;
                //err_putint1(BueroTXdaten[0]);
                //err_putc(' ');
                
