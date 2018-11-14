@@ -2115,6 +2115,7 @@ void DataTask(void)
             }
             txbuffer[0]=0;
             txbuffer[1]=0;
+            txbuffer[7]=77;
 #pragma mark PWM
             /*
              PWM lesen
@@ -2210,6 +2211,11 @@ void DataTask(void)
                outbuffer[33] = WerkstattRXdaten[STROMHH];
                outbuffer[34] = WerkstattRXdaten[STROMH];
                outbuffer[35] = WerkstattRXdaten[STROML];
+               outbuffer[36] = WerkstattRXdaten[2];
+ //              err_gotoxy(0,2);
+ //              err_puthex(WerkstattRXdaten[7]);
+               err_gotoxy(4,2);
+               err_puthex(twicount);
                /*
                 lcd_gotoxy(0,3);
                 lcd_putc('E');
@@ -2219,11 +2225,7 @@ void DataTask(void)
                 
                 */
             }
-            
-            
-            
-            
-            LeseStatus &= ~(1<< WERKSTATT);
+             LeseStatus &= ~(1<< WERKSTATT);
          }
          
 #pragma mark Wozi               
@@ -2558,7 +2560,11 @@ void DataTask(void)
             pos=Zeit.minute%5;
             //               err_gotoxy(12,1);
             //               err_puthex(pos);
-            BueroTXdaten[3]=pos;
+            //BueroTXdaten[3]=pos;
+            //BueroTXdaten[4]=44;
+            BueroTXdaten[5]=55; // 37
+            BueroTXdaten[6]=66; // 42
+            BueroTXdaten[7]=76; // 4C
             //delay_ms(40);
             /*
              switch (pos)
@@ -2595,7 +2601,7 @@ void DataTask(void)
             twi_Call_count0++;
             err_gotoxy(13,3);
             err_puts("w1");
-            
+            _delay_ms(100);
             bueroerfolg=SlavedatenSchreiben(BUERO_ADRESSE, BueroTXdaten);
             wdt_reset();
             if (bueroerfolg)
@@ -2696,7 +2702,25 @@ void DataTask(void)
             
             outbuffer[23] = BueroRXdaten[1]; // Temp
             
-            
+           // err_gotoxy(10,0);
+           // err_puthex(BueroRXdaten[6]);
+            //err_putc(' ');
+           // err_puthex(BueroRXdaten[7]);
+            //err_putc('*');
+            /*
+            err_gotoxy(0,2);
+            err_puthex(twicontrol[0]);
+            err_puthex(twicontrol[1]);
+           err_puthex(twicontrol[2]);
+            err_puthex(twicontrol[3]);
+
+            err_puthex(twicontrol[4]);
+            err_puthex(twicontrol[5]);
+
+            err_puthex(twicontrol[6]);
+            err_puthex(twicontrol[7]);
+            err_putc('*');
+            */
             //lcd_gotoxy(10,0);
             //lcd_puthex(BueroRXdaten[7]);
             LeseStatus &= ~(1<< BUERO);

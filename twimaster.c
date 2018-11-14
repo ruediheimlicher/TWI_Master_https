@@ -297,6 +297,7 @@ void i2c_stop(void)
     /* send stop condition */
 //	TWCR = (1<<TWINT) | (1<<TWEN) | (1<<TWSTO);
 //	29.10.08
+   
 	TWCR = (1<<TWINT)|(1<<TWEN)|(1<<TWSTO)|(1<<TWEA)|(1<<TWIE);
 	// wait until stop condition is executed and bus released
 	/*

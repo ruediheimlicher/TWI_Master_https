@@ -54,6 +54,7 @@
 
 #define buffer_size         8
 
+#define TWI_DELAY 2
 /*
  #define NULLTASK            0xB0   // Nichts tun
  #define STATUSTASK         0xB1   // Status des TWI aendern

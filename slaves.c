@@ -45,7 +45,7 @@
 
 #define TAGPLANBREITE		0x40	// 64 Bytes, 2 page im EEPROM
 #define RAUMPLANBREITE		0x200	// 512 Bytes
-
+extern volatile uint8_t twicontrol[buffer_size];
 extern volatile uint8_t rxbuffer[buffer_size];
 extern volatile uint8_t txbuffer[buffer_size];
 //extern char* wochentagstring[];
@@ -93,7 +93,7 @@ uint8_t SlaveSchreiben(unsigned char ADRESSE)
 					*/
 					//writeerfolg=i2c_write(Daten[i]);
 					writeerfolg=i2c_write(txbuffer[i]);
-					/*
+  					/*
 					err_gotoxy(0,1);
 					err_puts("E:\0 ");
 					err_putint1(writeerfolg);
@@ -188,7 +188,11 @@ uint8_t SlavedatenSchreiben(const unsigned char ADRESSE, const uint8_t *Daten)
 			err_puts("write Startadresse OK\0 ");
 			delay_ms(800);
 			*/
-			writeerfolg=i2c_rep_start(ADRESSE+I2C_WRITE); //Schreiben beginnen
+         if (!(ADRESSE == 0x62))
+         {
+       //     writeerfolg=i2c_rep_start(ADRESSE+I2C_WRITE); //Schreiben beginnen
+       //     _delay_ms(TWI_DELAY);
+         }
 			//err_putc('3');
 			//err_puthex(writeerfolg);
 
@@ -216,6 +220,17 @@ uint8_t SlavedatenSchreiben(const unsigned char ADRESSE, const uint8_t *Daten)
 					//writeerfolg=i2c_write(Daten[i]);
 
 					writeerfolg=i2c_write(Daten[i]);
+               
+               _delay_ms(TWI_DELAY);
+               if (ADRESSE == 0x62)
+               {
+                  if(i==0) // erstes byte
+                  {
+                     err_gotoxy(18,2);
+                     err_puthex(writeerfolg);
+                  }
+                  twicontrol[i] = Daten[i];
+               }
 
 					//err_putint1(i);
 					//err_putc(' ');
@@ -240,6 +255,8 @@ uint8_t SlavedatenSchreiben(const unsigned char ADRESSE, const uint8_t *Daten)
 					
 					i++;
 				}//while 
+            
+            
 				if (i<7)//Fehler
 				{
 					//err_clr_part(1,9,19);

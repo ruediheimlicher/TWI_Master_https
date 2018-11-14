@@ -91,7 +91,7 @@
 #define STROML       6
 
 
-
+volatile uint8_t twicontrol[buffer_size]={};
 
 /*Der Buffer fuer die Daten der DCF-Uhr.*/
 uint8_t DCF77daten[buffer_size];//
@@ -122,7 +122,7 @@ struct time {
   uint8_t kalenderjahr;
 };
 
-
+volatile uint8_t     twicount=0;
 
 volatile struct time Zeit;
 
