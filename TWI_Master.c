@@ -1565,7 +1565,7 @@ void DataTask(void)
             //err_gotoxy(0,1);
             //err_puts("H\0");
             
-            uint8_t tagblock[buffer_size];
+            uint8_t tagblock[buffer_size]={};
             uint8_t Stundencode=0;
             txbuffer[0]=0;
             
@@ -1590,9 +1590,11 @@ void DataTask(void)
             //OSZIALO;
             //err_puthex(erfolg);
             wdt_reset();
+            HeizungStundencode=0;
+            
             if (erfolg==0)
             {
-               Stundencode=Tagplanwert(tagblock, Zeit.stunde); // Stundencode fuer aktuelle Stunde
+               //Stundencode=Tagplanwert(tagblock, Zeit.stunde); // Stundencode fuer aktuelle Stunde
                HeizungStundencode=Tagplanwert(tagblock, Zeit.stunde);
                
                //err_gotoxy(0,1);
@@ -1622,14 +1624,14 @@ void DataTask(void)
                   case 0: // erste halbe Stunde  |_
                   {
                      
-                     txbuffer[0]=(Stundencode >=2); //Werte 2: erste halbe Std, 3: ganze Std auf FULL Wert 0: Brenner RED/OFF
+                     txbuffer[0]=(HeizungStundencode >=2); //Werte 2: erste halbe Std, 3: ganze Std auf FULL Wert 0: Brenner RED/OFF
                      // 
                      // Bit 3 fuer Anzeige der Halbstunde ist Null
                   }break;
                   
                   case 1: // zweite halbe Stunde _|
                   {
-                     txbuffer[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1: zweite halbe Std, 3: ganze Std auf FULL Wert 0: Brenner RED/OFF
+                     txbuffer[0]=((HeizungStundencode ==1)||(HeizungStundencode==3)); //Werte 1: zweite halbe Std, 3: ganze Std auf FULL Wert 0: Brenner RED/OFF
                      HeizungStundencode |= (1<<3);   // Bit 3 fuer Anzeige der Halbstunde ist 1
                   }break;
                   
@@ -1662,7 +1664,7 @@ void DataTask(void)
             }
             // end Objekt 0
             // Code fuer Objekt 1 lesen: Tag/Nacht-Mode der Heizung
-            uint8_t tagblock1[buffer_size];
+            uint8_t tagblock1[buffer_size]={};
             uint8_t Stundencode1=0;   
             err_gotoxy(13,3);
             err_puts("r2");
@@ -1738,6 +1740,7 @@ void DataTask(void)
             //OSZIAHI;
             delay_ms(1);
             //OSZIALO;
+            RinneStundencode=0;
             if (obj2erfolg==0) // EEPROM erfolgreich gelesen
             {
                RinneStundencode=Tagplanwert(tagblock2, Zeit.stunde);
