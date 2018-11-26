@@ -1269,8 +1269,7 @@ void DataTask(void)
       {
          //if ((min/30)&&(min%30==0)&&(std<23))
          {
-            
-            RTC_Aktualisieren();
+//            RTC_Aktualisieren();
          }
       }
       
@@ -1286,6 +1285,17 @@ void DataTask(void)
       if ((((min/30)&&(min%30==0)&&(std<23))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
       {
          uhrstatus |= (1<<SYNC_READY);
+      }
+      else
+      {
+         if (!((uhrstatus & (1<<SYNC_NULL)) ))//(uhrstatus & (1<<SYNC_WAIT))))     // Nach reset oder am start rtc noch nicht abfragen
+         {
+            if ((min/30)&&(min%30==0)&&(std<23))
+            {
+               RTC_Aktualisieren();
+            }
+         }
+
       }
       
       
@@ -1499,7 +1509,7 @@ void DataTask(void)
          
          
          //   Zeit vorwaertsstellen
-         if ((min > Zeit.minute) || ((min ==0)&&(std==0)) || (std> Zeit.stunde) ) //neue Minute oder neue Stunde oder neuer Tag
+         if ((min > Zeit.minute) || ((min ==0)&&(std==0)) || (std > Zeit.stunde) ) //neue Minute oder neue Stunde oder neuer Tag
          {
             //uint8_t synchfehler=0;
             //                  err_gotoxy(9,0);
@@ -1613,9 +1623,10 @@ void DataTask(void)
                
                
                //Echo = HeizungStundencode;
+               outbuffer[27] = HeizungStundencode;
                
                HeizungStundencode &= 0x03; // Bit 0 und 1 filtern
-               //outbuffer[27] = HeizungStundencode;
+               
                //err_puts(" c\0");
                //err_puthex(Stundencode);
                txbuffer[0]=0;
@@ -1733,7 +1744,7 @@ void DataTask(void)
             
             // Code fuer Objekt 2 lesen: Dachrinnenheizung
             
-            uint8_t tagblock2[buffer_size];
+            uint8_t tagblock2[buffer_size]={};
             err_gotoxy(13,3);
             err_puts("r3");
             uint8_t obj2erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock2, HEIZUNG, 2, Zeit.wochentag);
@@ -1744,7 +1755,7 @@ void DataTask(void)
             if (obj2erfolg==0) // EEPROM erfolgreich gelesen
             {
                RinneStundencode=Tagplanwert(tagblock2, Zeit.stunde);
-               
+               outbuffer[29] = RinneStundencode;
                //   outbuffer[30] = RinneStundencode; // auskomm 7.4.11
                
                //err_gotoxy(0,1);
@@ -1789,7 +1800,7 @@ void DataTask(void)
             /*
              PWM lesen
              */
-            uint8_t tagblock3[buffer_size];
+            uint8_t tagblock3[buffer_size]={};
             err_gotoxy(13,3);
             err_puts("r4");
             uint8_t obj3erfolg=WochentagLesen(EEPROM_WOCHENPLAN_ADRESSE, tagblock3, HEIZUNG, 3, 0);
@@ -1813,7 +1824,7 @@ void DataTask(void)
             }
             else
             {
-               
+               pwmcode = 0;
             }
             
             /*
