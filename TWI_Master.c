@@ -1269,7 +1269,7 @@ void DataTask(void)
       {
          //if ((min/30)&&(min%30==0)&&(std<23))
          {
-//            RTC_Aktualisieren();
+            RTC_Aktualisieren();
          }
       }
       
@@ -1292,7 +1292,7 @@ void DataTask(void)
          {
             if ((min/30)&&(min%30==0)&&(std<23))
             {
-               RTC_Aktualisieren();
+               //RTC_Aktualisieren();
             }
          }
 
@@ -1824,7 +1824,7 @@ void DataTask(void)
             }
             else
             {
-               pwmcode = 0;
+               
             }
             
             /*
