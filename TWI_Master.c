@@ -1272,17 +1272,14 @@ void DataTask(void)
             RTC_Aktualisieren();
          }
       }
-      
-      
 #pragma mark Synchronisation
-      
-      
       // Synchronisation
-      
       
       //sync start
       // alle 60 Min: Warten starten
-      if ((((min/30)&&(min%30==0)&&(std<23) && (std > 0))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
+      if ((((min/30)&&(min%30==0)&&(std<23))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
+
+      //if ((((min/30)&&(min%30==0)&&(std<23) && (std > 0))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
       {
          uhrstatus |= (1<<SYNC_READY);
       }
