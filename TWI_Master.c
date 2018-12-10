@@ -1073,20 +1073,20 @@ uint8_t RTC_Abrufen (void)
     }
     uint8_t stunde=((data & 0xF0)>>4)*10 + (data & 0x0F);;
     */
-   uint8_t sekunde=0;
-   uint8_t minute=0;
-   uint8_t stunde=0;
+   uint8_t RTCsekunde=0;
+   uint8_t RTCminute=0;
+   uint8_t RTCstunde=0;
    
    
    
-   RTCerfolg=read_Zeit(&sekunde, &minute, &stunde);
+   RTCerfolg=read_Zeit(&RTCsekunde, &RTCminute, &RTCstunde);
    
    if (test)
    {
       err_gotoxy(0,0);
-      err_putint2(stunde);
+      err_putint2(RTCstunde);
       err_putc(':');
-      err_putint2(minute);
+      err_putint2(RTCminute);
       err_gotoxy(0,4);
       err_putc(' ');
       err_gotoxy(0,4);
@@ -1097,16 +1097,16 @@ uint8_t RTC_Abrufen (void)
    err_puthex(RTCerfolg);
    
    
-   RTCdaten[0]=minute;
-   RTCdaten[1]=stunde;
+   RTCdaten[0]=RTCminute;
+   RTCdaten[1]=RTCstunde;
    
    
-   uint8_t wochentag;
-   uint8_t tagdesmonats;
-   uint8_t monat;
-   uint8_t jahr;
+   uint8_t RTCwochentag;
+   uint8_t RTCtagdesmonats;
+   uint8_t RTCmonat;
+   uint8_t RTCjahr;
    
-   RTCerfolg=Read_Datum(&wochentag,&tagdesmonats,&monat,&jahr);
+   RTCerfolg=Read_Datum(&RTCwochentag,&RTCtagdesmonats,&RTCmonat,&RTCjahr);
    
    
    
@@ -1127,10 +1127,10 @@ uint8_t RTC_Abrufen (void)
    err_gotoxy(2,0);
    err_puthex(RTCerfolg);
    
-   RTCdaten[2]=tagdesmonats;
-   RTCdaten[3]=monat;
-   RTCdaten[4]=jahr;
-   RTCdaten[5]=wochentag;
+   RTCdaten[2]=RTCtagdesmonats;
+   RTCdaten[3]=RTCmonat;
+   RTCdaten[4]=RTCjahr;
+   RTCdaten[5]=RTCwochentag ;
    outbuffer[6] = RTCerfolg+1; // 0xB0 bei Aktualisieren
    return RTCerfolg;
    // end Uhr lesen
@@ -1733,7 +1733,7 @@ void DataTask(void)
             } // erfolg==0
             else
             {
-               stundencode1 = 0;
+               Stundencode1 = 0;
                // SPI senden verhindern
                spistatus |= (1<<TWI_ERR_BIT);
                EEPROM_Err |= (1<<HEIZUNG);
@@ -4371,7 +4371,7 @@ int main (void)
                   min = inbuffer[17];
                   Zeit.minute = inbuffer[17];
                   
-               
+                  Zeit.wochentag = inbuffer[18];
                   
                   //err_putc('*');
                }
