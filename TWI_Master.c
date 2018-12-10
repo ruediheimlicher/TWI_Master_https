@@ -1130,7 +1130,7 @@ uint8_t RTC_Abrufen (void)
    RTCdaten[2]=RTCtagdesmonats;
    RTCdaten[3]=RTCmonat;
    RTCdaten[4]=RTCjahr;
-   RTCdaten[5]=RTCwochentag ;
+   RTCdaten[5]=RTCwochentag -1;
    outbuffer[6] = RTCerfolg+1; // 0xB0 bei Aktualisieren
    return RTCerfolg;
    // end Uhr lesen
@@ -1335,7 +1335,7 @@ void DataTask(void)
             lcd_putc(':');
             lcd_putint2(RTCdaten[0]); // minute
             lcd_putc(':');
-            lcd_putint1(RTCdaten[5]-1); // wochentag
+            lcd_putint1(RTCdaten[5]); // wochentag
             lcd_puts(" SYNC+");
             
          }
@@ -4361,7 +4361,7 @@ int main (void)
                res=rtc_write_Zeit(inbuffer[16],inbuffer[17],0);// uint8_t stunde, uint8_t minute, uint8_t sekunde
                delay_ms(10);
                //lcd_putc('C');
-               if (res)
+               if (res) // fehler, Zeit aus inbuffer
                {
                   err_gotoxy(12,0);
                   err_puts("Z-\0");
@@ -4386,10 +4386,10 @@ int main (void)
                //lcd_putc('D');
                
                // Datum setzen: 1 = Montag
-               res=rtc_write_Datum(inbuffer[18],inbuffer[19],inbuffer[20],18);// uint8_t wochentag, uint8_t tagdesmonats, uint8_t monat, uint8_t jahr
+               res=rtc_write_Datum(inbuffer[18]+1,inbuffer[19],inbuffer[20],18);// uint8_t wochentag, uint8_t tagdesmonats, uint8_t monat, uint8_t jahr
                delay_ms(10);
                //lcd_putc('E');
-               if (res)
+               if (res) // fehler, Zeit aus inbuffer
                {
                   //err_gotoxy(14,0);
                   //err_puts("  ");
