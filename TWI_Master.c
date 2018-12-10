@@ -1276,9 +1276,9 @@ void DataTask(void)
       // Synchronisation
       
       //sync start
-      // alle 60 Min: Warten starten
+      // alle 60 Min bei Minute 30: Warten starten
       if ((((min/30)&&(min%30==0)&&(std<23))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
-
+      
       //if ((((min/30)&&(min%30==0)&&(std<23) && (std > 0))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
       {
          uhrstatus |= (1<<SYNC_READY);
@@ -1292,22 +1292,23 @@ void DataTask(void)
                //RTC_Aktualisieren();
             }
          }
-
+         
       }
+      
       
       
       
       // TODO: Bei fehlgeschlagener Synchronisation Uhr unverŠndert lassen. Eventuell mit ODER SYNC_READY und SYNC_NEW und SYNC_OK
       
-      if (uhrstatus & (1<<SYNC_READY)) // DCF77-Uhr ist wieder bereit, RTC updaten (Zeit synchronisieren)
+      if (uhrstatus & (1<<SYNC_READY)) // RTC updaten (Zeit synchronisieren)
       {
          TWI_FLAG = 0;
          //    out_startdaten = SYNCOKTASK;
          uint8_t res=0;
          
-     //    res=rtc_write_Zeit(DCF77daten[1], DCF77daten[0],0); // stunde, minute, sekunde
+         //    res=rtc_write_Zeit(DCF77daten[1], DCF77daten[0],0); // stunde, minute, sekunde
          
-     //    res=rtc_write_Datum(DCF77daten[5], DCF77daten[2], DCF77daten[3],DCF77daten[4]);
+         //    res=rtc_write_Datum(DCF77daten[5], DCF77daten[2], DCF77daten[3],DCF77daten[4]);
          uhrstatus &= ~(1<<SYNC_READY);
          uhrstatus |= (1<<SYNC_OK);
          //     uhrstatus &= ~(1<<SYNC_NEW);                 // TWI soll jetzt Daten senden
@@ -1322,7 +1323,7 @@ void DataTask(void)
          }
          else
          {
-             /*
+            /*
              RTCdaten[0]=minute;
              RTCdaten[1]=stunde;
              RTCdaten[2]=tagdesmonats;
@@ -1330,11 +1331,11 @@ void DataTask(void)
              RTCdaten[4]=jahr;
              RTCdaten[5]=wochentag;
              */
-            lcd_putint2(RTCdaten[1]);
+            lcd_putint2(RTCdaten[1]); // stunde
             lcd_putc(':');
-            lcd_putint2(RTCdaten[0]);
+            lcd_putint2(RTCdaten[0]); // minute
             lcd_putc(':');
-            lcd_putint1(RTCdaten[5]-1);
+            lcd_putint1(RTCdaten[5]-1); // wochentag
             lcd_puts(" SYNC+");
             
          }
@@ -1353,7 +1354,7 @@ void DataTask(void)
             err_putc(' ');
             err_puthex(RTC_erfolg);
             err_putc('!');
-             // aktuelle Schlaufe verlassen
+            // aktuelle Schlaufe verlassen
          }
          else
          {
@@ -1722,8 +1723,8 @@ void DataTask(void)
                   txbuffer[3]=Testposition;                              
                }
                
-               Stundencode1 <<=4;         // Bit 4 bis 5 in Heizungsstundencode fuer Mode
                
+               Stundencode1 <<=4;         // Bit 4 bis 5 in Heizungsstundencode fuer Mode
                HeizungStundencode |= Stundencode1;
                
                
@@ -1732,6 +1733,7 @@ void DataTask(void)
             } // erfolg==0
             else
             {
+               stundencode1 = 0;
                // SPI senden verhindern
                spistatus |= (1<<TWI_ERR_BIT);
                EEPROM_Err |= (1<<HEIZUNG);
@@ -4368,6 +4370,9 @@ int main (void)
                   Zeit.stunde = inbuffer[16];
                   min = inbuffer[17];
                   Zeit.minute = inbuffer[17];
+                  
+               
+                  
                   //err_putc('*');
                }
                else 
