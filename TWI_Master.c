@@ -1261,67 +1261,62 @@ void DataTask(void)
       //               uhrstatus &= ~(1<<SYNC_NEW);                 // TWI soll jetzt Daten senden
       
    }
-   else
+   else // not test
    {
       
 #pragma mark Uhr
+      
+      // ******************************************
+      // *** Uhr aktualisieren
+      // ******************************************
       if (!((uhrstatus & (1<<SYNC_NULL)) ))//(uhrstatus & (1<<SYNC_WAIT))))     // Nach reset oder am start rtc noch nicht abfragen
       {
-         //if ((min/30)&&(min%30==0)&&(std<23))
-         {
+         
             RTC_Aktualisieren();
-         }
+            /*
+             Ergebnis:
+             RTCdaten[2]=RTCtagdesmonats;
+             RTCdaten[3]=RTCmonat;
+             RTCdaten[4]=RTCjahr;
+             RTCdaten[5]=RTCwochentag -1;
+
+             */
+         
       }
 #pragma mark Synchronisation
       // Synchronisation
       
       //sync start
-      // alle 60 Min bei Minute 30: Warten starten
+      // ******************************************
+      // *** Uhr synch alle 60 Min bei Minute 30: Warten starten
+      // ******************************************
+
       if ((((min/30)&&(min%30==0)&&(std<23))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
-      
-      //if ((((min/30)&&(min%30==0)&&(std<23) && (std > 0))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
+         
+         //if ((((min/30)&&(min%30==0)&&(std<23) && (std > 0))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
       {
          uhrstatus |= (1<<SYNC_READY);
       }
-      else
-      {
-         if (!((uhrstatus & (1<<SYNC_NULL)) ))//(uhrstatus & (1<<SYNC_WAIT))))     // Nach reset oder am start rtc noch nicht abfragen
-         {
-            if ((min/30)&&(min%30==0)&&(std<23))
-            {
-               //RTC_Aktualisieren();
-            }
-         }
-         
-      }
-      
-      
-      
-      
+
       // TODO: Bei fehlgeschlagener Synchronisation Uhr unverŠndert lassen. Eventuell mit ODER SYNC_READY und SYNC_NEW und SYNC_OK
       
+      // ******************************************
+      // *** Uhr sync start
+      // ******************************************
+
       if (uhrstatus & (1<<SYNC_READY)) // RTC updaten (Zeit synchronisieren)
       {
          TWI_FLAG = 0;
          //    out_startdaten = SYNCOKTASK;
          uint8_t res=0;
          
-         //    res=rtc_write_Zeit(DCF77daten[1], DCF77daten[0],0); // stunde, minute, sekunde
-         
-         //    res=rtc_write_Datum(DCF77daten[5], DCF77daten[2], DCF77daten[3],DCF77daten[4]);
          uhrstatus &= ~(1<<SYNC_READY);
          uhrstatus |= (1<<SYNC_OK);
+         
          //     uhrstatus &= ~(1<<SYNC_NEW);                 // TWI soll jetzt Daten senden
          
          lcd_gotoxy(0,1);
          lcd_puts("S:\0");
-         if (res)
-         {
-            lcd_puts("SYNC\0");
-            lcd_puts("err:\0");
-            lcd_puthex(res);
-         }
-         else
          {
             /*
              RTCdaten[0]=minute;
@@ -1343,6 +1338,7 @@ void DataTask(void)
          lcd_puts("   \0");
          
          // ev. weg
+         /*
          uint8_t RTC_erfolg = RTC_Abrufen();
          outbuffer[6] = RTC_erfolg;
          if (RTC_erfolg)                           // Fehler, aussteigen
@@ -1366,6 +1362,7 @@ void DataTask(void)
             //err_putc(':');
             //err_putint2(RTCdaten[0]);
          }
+          */
          if (TWI_FLAG > 0)
          {
             err_gotoxy(10,2);
@@ -1400,7 +1397,7 @@ void DataTask(void)
    // ++++++++++++++++++++++++++++++++
    // End NOT TEST
    // ++++++++++++++++++++++++++++++++      
-    
+   
    
 #pragma mark readSR                        
    
@@ -1467,7 +1464,7 @@ void DataTask(void)
    lcd_putint2(min);
    
    if ((SchreibStatus || LeseStatus))// && (!(uhrstatus & (1<<SYNC_FIRSTRUN))))      // Uhr nicht gerade am Synchronisieren
-   // && (twi_HI_count0 >= 0x02))//&&(TastaturCount==0))
+      // && (twi_HI_count0 >= 0x02))//&&(TastaturCount==0))
    {
       err_clr_line(2);
       TWI_FLAG = 0;
@@ -1487,7 +1484,7 @@ void DataTask(void)
          out_lbdaten=0;
          
          uint8_t i=0;
-         for (i=0 ; i<SPI_BUFSIZE; i++) 
+        // for (i=0 ; i<SPI_BUFSIZE; i++) 
          {
             //outbuffer[i]=0;
          }
@@ -1497,17 +1494,18 @@ void DataTask(void)
          min= RTCdaten[0];
          std= RTCdaten[1];
          tag= RTCdaten[2];
-         
+         /*
          Zeit.minute = RTCdaten[0];
          Zeit.stunde = RTCdaten[1];
          Zeit.kalendertag = RTCdaten[2];
          Zeit.kalendermonat = RTCdaten[3];
          Zeit.kalenderjahr = RTCdaten[4];
          Zeit.wochentag = RTCdaten[5];   // RTC, DCF77: Montag=1; EEPROM: Montag=0
-         
+         */
          
          //   Zeit vorwaertsstellen
          if ((min > Zeit.minute) || ((min ==0)&&(std==0)) || (std > Zeit.stunde) ) //neue Minute oder neue Stunde oder neuer Tag
+         
          {
             //uint8_t synchfehler=0;
             //                  err_gotoxy(9,0);
@@ -1637,13 +1635,13 @@ void DataTask(void)
                      // 
                      // Bit 3 fuer Anzeige der Halbstunde ist Null
                   }break;
-                  
+                     
                   case 1: // zweite halbe Stunde _|
                   {
                      txbuffer[0]=((HeizungStundencode ==1)||(HeizungStundencode==3)); //Werte 1: zweite halbe Std, 3: ganze Std auf FULL Wert 0: Brenner RED/OFF
                      HeizungStundencode |= (1<<3);   // Bit 3 fuer Anzeige der Halbstunde ist 1
                   }break;
-                  
+                     
                   default:
                   {
                      txbuffer[0]=0; // 7.4.11
@@ -1694,18 +1692,18 @@ void DataTask(void)
                switch (Stundencode1)
                {
                   case 0: // Grundstellung, Tag ON, Nacht OFF
-                  txbuffer[3] = 0x01; // Schalterposition 1
-                  break;
-                  
+                     txbuffer[3] = 0x01; // Schalterposition 1
+                     break;
+                     
                   case 1: // Tag ON, Nacht Red
-                  txbuffer[3] = 0x02; // Schalterposition 2
-                  break;
-                  
+                     txbuffer[3] = 0x02; // Schalterposition 2
+                     break;
+                     
                   case 2:
-                  txbuffer[3] = 0x04; // Schalterposition 4
-                  break;
-                  
-                  
+                     txbuffer[3] = 0x04; // Schalterposition 4
+                     break;
+                     
+                     
                }// switch Stundencode1
                
                
@@ -2047,7 +2045,7 @@ void DataTask(void)
                         txbuffer[0] &= ~(1<< 0); // Bit 0 zuruecksetzen
                      }
                   }break;
-                  
+                     
                   case 1: // zweite halbe Stunde
                   {
                      
@@ -2225,8 +2223,8 @@ void DataTask(void)
                outbuffer[34] = WerkstattRXdaten[STROMH];
                outbuffer[35] = WerkstattRXdaten[STROML];
                outbuffer[36] = WerkstattRXdaten[2];
- //              err_gotoxy(0,2);
- //              err_puthex(WerkstattRXdaten[7]);
+               //              err_gotoxy(0,2);
+               //              err_puthex(WerkstattRXdaten[7]);
                err_gotoxy(4,2);
                err_puthex(twicount);
                /*
@@ -2238,7 +2236,7 @@ void DataTask(void)
                 
                 */
             }
-             LeseStatus &= ~(1<< WERKSTATT);
+            LeseStatus &= ~(1<< WERKSTATT);
          }
          
 #pragma mark Wozi               
@@ -2284,7 +2282,7 @@ void DataTask(void)
                      WoZiTXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
                      
                   }break;
-                  
+                     
                   case 1: // zweite halbe Stunde
                   {
                      WoZiTXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
@@ -2397,21 +2395,21 @@ void DataTask(void)
                switch (pos)
                {
                   case 0:
-                  WoZiTXdaten[4]=0;
-                  break;
-                  
+                     WoZiTXdaten[4]=0;
+                     break;
+                     
                   case 1:
-                  WoZiTXdaten[4]=35;
-                  break;
-                  
+                     WoZiTXdaten[4]=35;
+                     break;
+                     
                   case 2:
-                  WoZiTXdaten[4]=50;
-                  break;
-                  
+                     WoZiTXdaten[4]=50;
+                     break;
+                     
                   case 3:
-                  WoZiTXdaten[4]=65;
-                  break;
-                  
+                     WoZiTXdaten[4]=65;
+                     break;
+                     
                }//switch pos
                //      WebTxDaten[7]= WoZiRXdaten[1];   // Innentemperatur
                outbuffer[21]= WoZiRXdaten[1];
@@ -2509,7 +2507,7 @@ void DataTask(void)
                      err_putint1(BueroTXdaten[0]);
                      
                   }break;
-                  
+                     
                   case 1: // zweite halbe Stunde
                   {
                      BueroTXdaten[0] = ((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: ON Wert 0: OFF
@@ -2715,25 +2713,25 @@ void DataTask(void)
             
             outbuffer[23] = BueroRXdaten[1]; // Temp
             
-           // err_gotoxy(10,0);
-           // err_puthex(BueroRXdaten[6]);
+            // err_gotoxy(10,0);
+            // err_puthex(BueroRXdaten[6]);
             //err_putc(' ');
-           // err_puthex(BueroRXdaten[7]);
+            // err_puthex(BueroRXdaten[7]);
             //err_putc('*');
             /*
-            err_gotoxy(0,2);
-            err_puthex(twicontrol[0]);
-            err_puthex(twicontrol[1]);
-           err_puthex(twicontrol[2]);
-            err_puthex(twicontrol[3]);
-
-            err_puthex(twicontrol[4]);
-            err_puthex(twicontrol[5]);
-
-            err_puthex(twicontrol[6]);
-            err_puthex(twicontrol[7]);
-            err_putc('*');
-            */
+             err_gotoxy(0,2);
+             err_puthex(twicontrol[0]);
+             err_puthex(twicontrol[1]);
+             err_puthex(twicontrol[2]);
+             err_puthex(twicontrol[3]);
+             
+             err_puthex(twicontrol[4]);
+             err_puthex(twicontrol[5]);
+             
+             err_puthex(twicontrol[6]);
+             err_puthex(twicontrol[7]);
+             err_putc('*');
+             */
             //lcd_gotoxy(10,0);
             //lcd_puthex(BueroRXdaten[7]);
             LeseStatus &= ~(1<< BUERO);
@@ -2785,7 +2783,7 @@ void DataTask(void)
                      LaborTXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
                      
                   }break;
-                  
+                     
                   case 1: // zweite halbe Stunde
                   {
                      LaborTXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
@@ -2921,21 +2919,21 @@ void DataTask(void)
                switch (pos)
                {
                   case 0:
-                  LaborTXdaten[4]=0;
-                  break;
-                  
+                     LaborTXdaten[4]=0;
+                     break;
+                     
                   case 1:
-                  LaborTXdaten[4]=35;
-                  break;
-                  
+                     LaborTXdaten[4]=35;
+                     break;
+                     
                   case 2:
-                  LaborTXdaten[4]=50;
-                  break;
-                  
+                     LaborTXdaten[4]=50;
+                     break;
+                     
                   case 3:
-                  LaborTXdaten[4]=65;
-                  break;
-                  
+                     LaborTXdaten[4]=65;
+                     break;
+                     
                }//switch pos
             }
             
@@ -2986,7 +2984,7 @@ void DataTask(void)
                      OG1TXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
                      
                   }break;
-                  
+                     
                   case 1: // zweite halbe Stunde
                   {
                      OG1TXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
@@ -3121,7 +3119,7 @@ void DataTask(void)
                      OG2TXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
                      
                   }break;
-                  
+                     
                   case 1: // zweite halbe Stunde
                   {
                      OG2TXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
@@ -3280,7 +3278,7 @@ void DataTask(void)
                      EstrichTXdaten[0]=(Stundencode >=2); //Werte 2, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
                      
                   }break;
-                  
+                     
                   case 1: // zweite halbe Stunde
                   {
                      EstrichTXdaten[0]=((Stundencode ==1)||(Stundencode==3)); //Werte 1, 3: Brenner auf FULL Wert 0: Brenner RED/OFF
@@ -4333,6 +4331,8 @@ int main (void)
             lcd_gotoxy(18,0);
             lcd_putint1(SPI_Call_count0);
             
+            // Datun und Zeit vom Webserver lesen
+            
             lcd_gotoxy(12,2);
             lcd_putint2(inbuffer[16]);// stunde
             lcd_putc(':');
@@ -4341,10 +4341,13 @@ int main (void)
             lcd_putint2(inbuffer[18]);// wochentag
             //lcd_gotoxy(0,1);
             //lcd_putc('A');
+            
             // Start, RTC setzen mit  Zeit vom Webserver
             
             // SYNC_NULL ist noch gesetzt: Noch keine Zeit eingesetzt
             // SYNC_FIRSTRUN muss geloescht sein, um die Zeit einzusetzen. Zeit kommt mit dem ersten SPI-Paket
+            
+            
             if ((uhrstatus & (1<<SYNC_NULL)) && (!(uhrstatus & (1<<SYNC_FIRSTRUN) ))) 
             {
                
@@ -4357,7 +4360,7 @@ int main (void)
                   err_puts("C-");
                }
                //lcd_putc('B');
-               // Zeit setzen: stunde, minute, sekunde
+               // Zeit vom Webserver setzen: stunde, minute, sekunde
                res=rtc_write_Zeit(inbuffer[16],inbuffer[17],0);// uint8_t stunde, uint8_t minute, uint8_t sekunde
                delay_ms(10);
                //lcd_putc('C');
@@ -4385,7 +4388,7 @@ int main (void)
                }
                //lcd_putc('D');
                
-               // Datum setzen: 1 = Montag
+               // Datum vom Webserver setzen: 1 = Montag
                res=rtc_write_Datum(inbuffer[18]+1,inbuffer[19],inbuffer[20],18);// uint8_t wochentag, uint8_t tagdesmonats, uint8_t monat, uint8_t jahr
                delay_ms(10);
                //lcd_putc('E');
@@ -4422,9 +4425,9 @@ int main (void)
                   err_puts("D+  \0");
                }
                //lcd_putc('F');
-               oldmin = inbuffer[17];
-               oldstd = inbuffer[16];
-               oldtag = inbuffer[18];
+ //              oldmin = inbuffer[17];
+ //              oldstd = inbuffer[16];
+ //              oldtag = inbuffer[18];
                if (res==0)
                {
                   std = inbuffer[16];
