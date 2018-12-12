@@ -1025,6 +1025,49 @@ uint8_t PWMDatenAbrufen (void)
 	
 }
 
+uint8_t RTC_Setzen(void)
+{
+   uint8_t res = 0;
+   res=rtc_write_Control(1);
+   delay_ms(30);
+   if (res)
+   {
+      err_gotoxy(8,0);
+      err_puts("RTC I-");
+      return 1;
+   }
+
+   // Zeit vom Webserver setzen: stunde, minute, sekunde
+   res=rtc_write_Zeit(inbuffer[16],inbuffer[17],0);// uint8_t stunde, uint8_t minute, uint8_t sekunde
+   delay_ms(10);
+   if (res)
+   {
+      err_gotoxy(8,0);
+      err_puts("RTC Z-");
+      return 2;
+   }
+   std = inbuffer[16];
+   Zeit.stunde = inbuffer[16];
+   min = inbuffer[17];
+   Zeit.minute = inbuffer[17];
+
+   // Datum vom Webserver setzen: 1 = Montag
+   res=rtc_write_Datum(inbuffer[18]+1,inbuffer[19],inbuffer[20],18);// uint8_t wochentag, uint8_t tagdesmonats, uint8_t monat, uint8_t jahr
+   delay_ms(10);
+   if (res)
+   {
+      err_gotoxy(8,0);
+      err_puts("RTC D-");
+      return 3;
+   }
+   Zeit.wochentag = inbuffer[18];
+   Zeit.kalendertag = inbuffer[19];
+   Zeit.kalendermonat = inbuffer[20];
+   Zeit.kalenderjahr = 18;
+
+   return 0;
+}
+
 
 uint8_t RTC_Abrufen (void)
 {
@@ -1045,35 +1088,7 @@ uint8_t RTC_Abrufen (void)
    //uint8_t data;
    uint8_t RTCerfolg=0;
    outbuffer[6] = 0;
-   /*
-    // Sekunden lesen: Register 0
-    RTCerfolg= DS1307Read(0x00,&data);
-    if (RTCerfolg)
-    {
-    return RTCerfolg;
-    }
-    
-    uint8_t sekunde = ((data & 0x70)>>4)*10 + (data & 0x0F);
-    
-    // Minuten lesen: Register 1
-    RTCerfolg= DS1307Read(0x01,&data);
-    if (RTCerfolg)
-    {
-    return RTCerfolg;
-    }
-    uint8_t minute=((data & 0xF0)>>4)*10 + (data & 0x0F);
-    
-    
-    
-    // Stunde lesen: Register 2
-    RTCerfolg= DS1307Read(0x02,&data);
-    if (RTCerfolg)
-    {
-    return RTCerfolg;
-    }
-    uint8_t stunde=((data & 0xF0)>>4)*10 + (data & 0x0F);;
-    */
-   uint8_t RTCsekunde=0;
+    uint8_t RTCsekunde=0;
    uint8_t RTCminute=0;
    uint8_t RTCstunde=0;
    
@@ -1101,6 +1116,9 @@ uint8_t RTC_Abrufen (void)
    RTCdaten[1]=RTCstunde;
    
    
+   Zeit.minute = RTCminute;
+   Zeit.stunde = RTCstunde;
+   
    uint8_t RTCwochentag;
    uint8_t RTCtagdesmonats;
    uint8_t RTCmonat;
@@ -1108,9 +1126,7 @@ uint8_t RTC_Abrufen (void)
    
    RTCerfolg=Read_Datum(&RTCwochentag,&RTCtagdesmonats,&RTCmonat,&RTCjahr);
    
-   
-   
-   /*
+    /*
     err_gotoxy(0,1);
     //err_puthex(RTCerfolg);
     //err_gotoxy(3,1);
@@ -1127,10 +1143,18 @@ uint8_t RTC_Abrufen (void)
    err_gotoxy(2,0);
    err_puthex(RTCerfolg);
    
+   
+   
    RTCdaten[2]=RTCtagdesmonats;
    RTCdaten[3]=RTCmonat;
    RTCdaten[4]=RTCjahr;
-   RTCdaten[5]=RTCwochentag -1;
+   RTCdaten[5]=RTCwochentag -1; // 1 ist Montag in RTC
+   
+   Zeit.kalendertag = RTCtagdesmonats;
+   Zeit.kalendermonat = RTCmonat;
+   Zeit.kalenderjahr = RTCjahr;
+   Zeit.wochentag = RTCwochentag -1; // 1 ist Montag in RTC
+   
    outbuffer[6] = RTCerfolg+1; // 0xB0 bei Aktualisieren
    return RTCerfolg;
    // end Uhr lesen
@@ -1272,7 +1296,7 @@ void DataTask(void)
       if (!((uhrstatus & (1<<SYNC_NULL)) ))//(uhrstatus & (1<<SYNC_WAIT))))     // Nach reset oder am start rtc noch nicht abfragen
       {
          
-            RTC_Aktualisieren();
+            RTC_Aktualisieren(); 
             /*
              Ergebnis:
              RTCdaten[2]=RTCtagdesmonats;
@@ -1281,6 +1305,9 @@ void DataTask(void)
              RTCdaten[5]=RTCwochentag -1;
 
              */
+         
+         
+         
          
       }
 #pragma mark Synchronisation
@@ -1291,11 +1318,11 @@ void DataTask(void)
       // *** Uhr synch alle 60 Min bei Minute 30: Warten starten
       // ******************************************
 
-      if ((((min/30)&&(min%30==0)&&(std<23))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
+      if ((((Zeit.minute/30)&&(Zeit.minute%30==0)&&(std<23))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
          
-         //if ((((min/30)&&(min%30==0)&&(std<23) && (std > 0))||(uhrstatus & (1<<SYNC_NULL)))&& (!(uhrstatus & (1<<SYNC_WAIT))))
       {
-         uhrstatus |= (1<<SYNC_READY);
+      //   uhrstatus |= (1<<SYNC_READY);
+         
       }
 
       // TODO: Bei fehlgeschlagener Synchronisation Uhr unverŠndert lassen. Eventuell mit ODER SYNC_READY und SYNC_NEW und SYNC_OK
@@ -1306,14 +1333,18 @@ void DataTask(void)
 
       if (uhrstatus & (1<<SYNC_READY)) // RTC updaten (Zeit synchronisieren)
       {
+         
+         
          TWI_FLAG = 0;
          //    out_startdaten = SYNCOKTASK;
          uint8_t res=0;
          
          uhrstatus &= ~(1<<SYNC_READY);
-         uhrstatus |= (1<<SYNC_OK);
+        // uhrstatus |= (1<<SYNC_OK);
          
          //     uhrstatus &= ~(1<<SYNC_NEW);                 // TWI soll jetzt Daten senden
+         
+         
          
          lcd_gotoxy(0,1);
          lcd_puts("S:\0");
@@ -1381,6 +1412,7 @@ void DataTask(void)
    
    outbuffer[39] = TWI_FLAG;
    
+   /*
    outbuffer[46] = RTCdaten[1]; // stunde
    outbuffer[47] = RTCdaten[0]; // minute
    outbuffer[45] = RTCdaten[5]; // wochentag
@@ -1390,8 +1422,17 @@ void DataTask(void)
    outbuffer[41] = RTCdaten[3] & 0x0F; //  monat
    
    uint8_t jahrab2010 = RTCdaten[4]  -10; // Jahr ab 2010
+   */
+   outbuffer[46] = Zeit.stunde; // stunde
+   outbuffer[47] = Zeit.minute; // minute
+   outbuffer[45] = Zeit.wochentag; // wochentag
    
-   //jahrab2010 <<=4; // bit
+   outbuffer[40] = Zeit.kalendertag; // tagdesmonats
+   
+   outbuffer[41] = Zeit.kalendermonat & 0x0F; //  monat
+
+   uint8_t jahrab2010 = Zeit.kalenderjahr -10;
+   jahrab2010 <<= 4; // bit
    outbuffer[41] |= jahrab2010  ;
    
    // ++++++++++++++++++++++++++++++++
@@ -1459,9 +1500,9 @@ void DataTask(void)
    TWITASK = 0;
    
    lcd_gotoxy(12,0);
-   lcd_putint2(std);
+   lcd_putint2(Zeit.stunde);
    lcd_putc(':');
-   lcd_putint2(min);
+   lcd_putint2(Zeit.minute);
    
    if ((SchreibStatus || LeseStatus))// && (!(uhrstatus & (1<<SYNC_FIRSTRUN))))      // Uhr nicht gerade am Synchronisieren
       // && (twi_HI_count0 >= 0x02))//&&(TastaturCount==0))
@@ -1503,10 +1544,13 @@ void DataTask(void)
          Zeit.wochentag = RTCdaten[5];   // RTC, DCF77: Montag=1; EEPROM: Montag=0
          */
          
+         /*
          //   Zeit vorwaertsstellen
          if ((min > Zeit.minute) || ((min ==0)&&(std==0)) || (std > Zeit.stunde) ) //neue Minute oder neue Stunde oder neuer Tag
          
          {
+            
+            
             //uint8_t synchfehler=0;
             //                  err_gotoxy(9,0);
             //                  err_puts("A\0");
@@ -1528,6 +1572,8 @@ void DataTask(void)
                oldstd=RTCdaten[1];
                oldtag=RTCdaten[2];
             }
+            
+            
             neueZeit=1; //   Zeit in RŠumen aktualisieren
             // 29.9.08                  
             if ((Menu_Ebene & 0xF0)==0) // Oberste Ebene, AnzeigeWochentag aktualisieren
@@ -1537,6 +1583,9 @@ void DataTask(void)
             }
             
          } //Zeit vorwaertsstellen
+         */
+         
+         
          wdt_reset();
          // end Uhr lesen
          
@@ -4506,9 +4555,7 @@ int main (void)
 						}
 						spistatus |= (1<<SPI_SHIFT_IN_OK_BIT);
                   
-                  
-                      
-               
+                 
                }
 					else 
 					{
@@ -4573,6 +4620,8 @@ int main (void)
                in_startdaten = MASTERTASK; // 180505 MASTERTASK   (180414 weiterfahren wie bisher)
                
 				}
+            
+            
 				
           //  lcd_gotoxy(6,0);
           //  lcd_puts("out");
@@ -4627,6 +4676,44 @@ int main (void)
             
             spistatus &= ~(1<<ACTIVE_BIT);		// Bit  loeschen, wurde nach 'neu aktiv' gesetzt
 				
+            if ((spistatus & (1<<SPI_SHIFT_IN_OK_BIT)) && spistatus & (1<<SUCCESS_BIT))// Daten OK, zur minute 30 Zeit synchronisieren
+            {
+               if ((((Zeit.minute/30) && (Zeit.minute%30==0)) || (uhrstatus & (1<<SYNC_NULL))) && (!(uhrstatus & (1<<SYNC_WAIT))))
+               {
+                  
+                  
+                  // oldtag setzen. Fuer check if neuer tag
+                  oldtag = Zeit.wochentag;
+                  
+                  // struct Zeit setzen aus inbuffer
+                  uint8_t rtcsetzenerfolg = RTC_Setzen(); 
+                  /*
+                   Ergebnis:
+                   Zeit.minute usw gesetzt.
+                   */
+                  lcd_gotoxy(0,1);
+                  lcd_puts("S:\0");
+                  {
+                     /*
+                      RTCdaten[0]=minute;
+                      RTCdaten[1]=stunde;
+                      RTCdaten[2]=tagdesmonats;
+                      RTCdaten[3]=monat;
+                      RTCdaten[4]=jahr;
+                      RTCdaten[5]=wochentag;
+                      */
+                     lcd_putint2(Zeit.stunde); // stunde
+                     lcd_putc(':');
+                     lcd_putint2(Zeit.minute); // minute
+                     lcd_putc(':');
+                     lcd_putint1(Zeit.wochentag); // wochentag
+                     lcd_puts(" SYNC+");
+                     
+                  }
+                  
+               }
+               
+            }
             // Bits im Zusammenhang mit der Uebertragung zuruecksetzen. Wurden in ISR gesetzt
             spistatus &= ~(1<<STARTDATEN_BIT);	// Bit 1 loeschen
 				spistatus &= ~(1<<ENDDATEN_BIT);		// Bit 2 loeschen
@@ -4659,6 +4746,9 @@ int main (void)
 				lcd_gotoxy(7,1);
 				lcd_puthex(SendErrCounter);
 				*/
+            
+
+            
 			} // if Active-Bit
 				
 #pragma mark HomeCentral-Tasks 
